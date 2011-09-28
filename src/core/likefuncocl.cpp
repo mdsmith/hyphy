@@ -643,9 +643,15 @@ double _OCLEvaluator::oclmain(void)
 
     // enqueueing the read and write buffers takes 1/2 the time, the kernel takes the other 1/2.
     // with no queueing, however, we still only see ~700lf/s, which isn't much better than the threaded CPU code.
-    ciErr1 |= clEnqueueWriteBuffer(cqCommandQueue, cmModel_cache, CL_TRUE, 0,
+    ciErr1 |= clEnqueueWriteBuffer(cqCommandQueue, cmModel_cache, CL_FALSE, 0,
                 sizeof(cl_float)*roundCharacters*roundCharacters*(flatParents.lLength-1),
                 model, 0, NULL, NULL);
+#ifdef __OCLPOSIX__
+    clock_gettime(CLOCK_MONOTONIC, &bufferEnd);
+    buffSecs += (bufferEnd.tv_sec - bufferStart.tv_sec)+(bufferEnd.tv_nsec - bufferStart.tv_nsec)/BILLION;
+
+    clock_gettime(CLOCK_MONOTONIC, &queueStart);
+#endif
     //clFinish(cqCommandQueue);
     if (ciErr1 != CL_SUCCESS)
     {
@@ -675,9 +681,6 @@ double _OCLEvaluator::oclmain(void)
     }
     */
 #ifdef __OCLPOSIX__
-    clock_gettime(CLOCK_MONOTONIC, &bufferEnd);
-    buffSecs += (bufferEnd.tv_sec - bufferStart.tv_sec)+(bufferEnd.tv_nsec - bufferStart.tv_nsec)/BILLION;
-
     clock_gettime(CLOCK_MONOTONIC, &queueStart);
 #endif
     //printf("Finished writing the model stuff\n");
@@ -877,6 +880,12 @@ double _OCLEvaluator::oclmain(void)
     clFinish(cqCommandQueue);
     double oResult = 0.0;
 
+#ifdef __OCLPOSIX__
+    clock_gettime(CLOCK_MONOTONIC, &queueEnd);
+    queueSecs += (queueEnd.tv_sec - queueStart.tv_sec)+(queueEnd.tv_nsec - queueStart.tv_nsec)/BILLION;
+    clock_gettime(CLOCK_MONOTONIC, &mainStart);
+#endif
+
 #ifdef __GPUResults__
 	/*
     for (int i = 0; i < siteCount; i++)
@@ -899,22 +908,8 @@ double _OCLEvaluator::oclmain(void)
         printf("%4.10g ", ((fpoint*)result_cache)[i]);
     printf("\n\n");
 	*/
-#ifdef __OCLPOSIX__
-    clock_gettime(CLOCK_MONOTONIC, &queueEnd);
-    queueSecs += (queueEnd.tv_sec - queueStart.tv_sec)+(queueEnd.tv_nsec - queueStart.tv_nsec)/BILLION;
-    clock_gettime(CLOCK_MONOTONIC, &mainStart);
-#endif
     oResult = ((fpoint*)result_cache)[0];
-#ifdef __OCLPOSIX__
-    clock_gettime(CLOCK_MONOTONIC, &mainEnd);
-    mainSecs += (mainEnd.tv_sec - mainStart.tv_sec)+(mainEnd.tv_nsec - mainStart.tv_nsec)/BILLION;
-#endif
 #else
-#ifdef __OCLPOSIX__
-    clock_gettime(CLOCK_MONOTONIC, &queueEnd);
-    queueSecs += (queueEnd.tv_sec - queueStart.tv_sec)+(queueEnd.tv_nsec - queueStart.tv_nsec)/BILLION;
-    clock_gettime(CLOCK_MONOTONIC, &mainStart);
-#endif
     //#pragma omp parallel for reduction (+:oResult) schedule(static)
     for (int i = 0; i < siteCount; i++)
     {
@@ -925,10 +920,6 @@ double _OCLEvaluator::oclmain(void)
     for (int i = 0; i < siteCount; i++)
         printf("%4.10g ", ((float*)result_cache)[i]);
     printf("\n\n");
-#endif
-#ifdef __OCLPOSIX__
-    clock_gettime(CLOCK_MONOTONIC, &mainEnd);
-    mainSecs += (mainEnd.tv_sec - mainStart.tv_sec)+(mainEnd.tv_nsec - mainStart.tv_nsec)/BILLION;
 #endif
 #endif
 /*
@@ -957,6 +948,10 @@ double _OCLEvaluator::oclmain(void)
         printf("\n\n");
     }
 */
+#ifdef __OCLPOSIX__
+    clock_gettime(CLOCK_MONOTONIC, &mainEnd);
+    mainSecs += (mainEnd.tv_sec - mainStart.tv_sec)+(mainEnd.tv_nsec - mainStart.tv_nsec)/BILLION;
+#endif
     return oResult;
 }
 
