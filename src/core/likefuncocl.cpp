@@ -258,7 +258,7 @@ int _OCLEvaluator::setupContext(void)
                              sizeof(size_t), &maxConstSize, NULL);
     printf("LocalSize: %ld, Const size: %ld\n", (long unsigned) maxLocalSize, (long unsigned) maxConstSize);
 
-    //printf("sites: %ld\n", siteCount);
+    printf("sites: %ld\n", siteCount);
 
     // set and log Global and Local work size dimensions
 
@@ -270,8 +270,8 @@ int _OCLEvaluator::setupContext(void)
     szLocalWorkSize[1] = 1;
 #endif
     szGlobalWorkSize[0] = 64;
-    //szGlobalWorkSize[1] = ((siteCount + 16)/16)*16;
-    szGlobalWorkSize[1] = roundUpToNextPowerOfTwo(siteCount);
+    szGlobalWorkSize[1] = ((siteCount + 16)/16)*16;
+    //szGlobalWorkSize[1] = roundUpToNextPowerOfTwo(siteCount);
     printf("Global Work Size \t\t= %ld, %ld\nLocal Work Size \t\t= %ld, %ld\n# of Work Groups \t\t= %ld\n\n",
            (long unsigned) szGlobalWorkSize[0],
            (long unsigned) szGlobalWorkSize[1],
@@ -652,7 +652,6 @@ double _OCLEvaluator::oclmain(void)
 
     clock_gettime(CLOCK_MONOTONIC, &queueStart);
 #endif
-    //clFinish(cqCommandQueue);
     if (ciErr1 != CL_SUCCESS)
     {
         printf("%i\n", ciErr1); //prints "1"
@@ -735,7 +734,6 @@ double _OCLEvaluator::oclmain(void)
                                                 szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
             }
             ciErr1 |= clFlush(cqCommandQueue);
-            clFinish(cqCommandQueue);
 #ifdef __VERBOSE__
             printf("Finished\n");
 #endif
@@ -759,7 +757,6 @@ double _OCLEvaluator::oclmain(void)
 
             //printf("internal!\n");
             ciErr1 |= clFlush(cqCommandQueue);
-            clFinish(cqCommandQueue);
 #ifdef __VERBOSE__
             printf("Finished\n");
 #endif
@@ -832,7 +829,7 @@ double _OCLEvaluator::oclmain(void)
     //ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
      //       sizeof(cl_double)*roundUpToNextPowerOfTwo(siteCount), result_cache, 0,
       //      NULL, NULL);
-    ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
+    ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALE, 0,
             sizeof(clfp), result_cache, 0,
             NULL, NULL);
     //ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
