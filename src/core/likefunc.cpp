@@ -7798,7 +7798,7 @@ _Parameter  _LikelihoodFunction::ComputeBlock (long index, _Parameter* siteRes, 
 
 
         t->ExponentiateMatrices(changedModels,
-                                1 /* use one thread */,
+                                8 /* use one thread */,
                                 -1 /*ignore this flag for now */);
 
         /* now for the kernel computation you would need to copy modified matrices onto the device using the code like

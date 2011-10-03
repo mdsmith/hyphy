@@ -251,8 +251,8 @@ if(${OPENCL_FOUND})
     set_target_properties(
         HYPHYOCL
         PROPERTIES
-        COMPILE_FLAGS "${DEFAULT_COMPILE_FLAGS}"
-        LINK_FLAGS "${DEFAULT_LINK_FLAGS}"
+        COMPILE_FLAGS "${DEFAULT_COMPILE_FLAGS} ${OpenMP_CXX_FLAGS}"
+        LINK_FLAGS "${DEFAULT_LINK_FLAGS} ${OpenMP_CXX_FLAGS}"
     )
     add_executable(
         cl2hdr
