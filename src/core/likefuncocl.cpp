@@ -36,7 +36,8 @@ typedef cl_float clfp;
 #elif defined(__NVIDIAOCL__)
 #define __GPUResults__
 #define __OCLPOSIX__
-#include <oclUtils.h>
+//#include <oclUtils.h>
+#include <CL/opencl.h>
 typedef double fpoint;
 typedef cl_double clfp;
 #define FLOATPREC "typedef double fpoint; \n"

@@ -44,6 +44,7 @@ ELSE(APPLE)
 ENDIF(APPLE)
 FIND_PATH(OPENCL_INCLUDE_DIR ${CL_DIR}/opencl.h 
     PATHS 
+		$ENV{HOME}/NVIDIA_GPU_Computing_SDK/OpenCL/common/inc
         /usr/local/cuda/include
         $ENV{AMDAPPSDKROOT}/include
         /System/Library/Frameworks/OpenCL.framework/Headers
