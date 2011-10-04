@@ -596,6 +596,7 @@ void            _LikelihoodFunction::PopulateConditionalProbabilities   (long in
                     forceRecomputation = saveFR;
                 }
 
+// MDSOCL TODO 
                 if (runMode == _hyphyLFConditionProbsRawMatrixMode)
                     for (long p = 0; p < blockLength; p++) {
                         scalers.lData[p+indexShifter] = siteCorrectors[p];
