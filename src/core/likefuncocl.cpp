@@ -494,11 +494,11 @@ int _OCLEvaluator::setupContext(void)
 
     long tempLeafState = 1;
     long tempSiteCount = siteCount;
-    long tempCharCount = alphabetDimension;
-    long tempChildNodeIndex = 0;
-    long tempParentNodeIndex = 0;
-    long tempRoundCharCount = roundUpToNextPowerOfTwo(alphabetDimension);
-    int  tempTagIntState = 0;
+    short tempCharCount = alphabetDimension;
+    int tempChildNodeIndex = 0;
+    int tempParentNodeIndex = 0;
+    short tempRoundCharCount = roundUpToNextPowerOfTwo(alphabetDimension);
+    short  tempTagIntState = 0;
     int   tempNodeID = 0;
     float tempScalar = scalar;
     // this is currently ignored, 1 is hardcoded into the kernel code. 
@@ -509,11 +509,11 @@ int _OCLEvaluator::setupContext(void)
     ciErr1 |= clSetKernelArg(ckLeafKernel, 2, sizeof(cl_mem), (void*)&cmNodRes_cache);
     ciErr1 |= clSetKernelArg(ckLeafKernel, 3, sizeof(cl_mem), (void*)&cmNodFlag_cache);
     ciErr1 |= clSetKernelArg(ckLeafKernel, 4, sizeof(cl_long), (void*)&tempSiteCount);
-    ciErr1 |= clSetKernelArg(ckLeafKernel, 5, sizeof(cl_long), (void*)&tempCharCount);
-    ciErr1 |= clSetKernelArg(ckLeafKernel, 6, sizeof(cl_long), (void*)&tempChildNodeIndex); // reset this in the loop
-    ciErr1 |= clSetKernelArg(ckLeafKernel, 7, sizeof(cl_long), (void*)&tempParentNodeIndex); // reset this in the loop
-    ciErr1 |= clSetKernelArg(ckLeafKernel, 8, sizeof(cl_long), (void*)&tempRoundCharCount);
-    ciErr1 |= clSetKernelArg(ckLeafKernel, 9, sizeof(cl_int), (void*)&tempTagIntState); // reset this in the loop
+    ciErr1 |= clSetKernelArg(ckLeafKernel, 5, sizeof(cl_short), (void*)&tempCharCount);
+    ciErr1 |= clSetKernelArg(ckLeafKernel, 6, sizeof(cl_int), (void*)&tempChildNodeIndex); // reset this in the loop
+    ciErr1 |= clSetKernelArg(ckLeafKernel, 7, sizeof(cl_int), (void*)&tempParentNodeIndex); // reset this in the loop
+    ciErr1 |= clSetKernelArg(ckLeafKernel, 8, sizeof(cl_short), (void*)&tempRoundCharCount);
+    ciErr1 |= clSetKernelArg(ckLeafKernel, 9, sizeof(cl_short), (void*)&tempTagIntState); // reset this in the loop
     ciErr1 |= clSetKernelArg(ckLeafKernel, 10, sizeof(cl_int), (void*)&tempNodeID); // reset this in the loop
     ciErr1 |= clSetKernelArg(ckLeafKernel, 11, sizeof(cl_mem), (void*)&cmScalings_cache);
     ciErr1 |= clSetKernelArg(ckLeafKernel, 12, sizeof(cl_float), (void*)&tempScalar);
@@ -524,11 +524,11 @@ int _OCLEvaluator::setupContext(void)
     ciErr1 |= clSetKernelArg(ckAmbigKernel, 2, sizeof(cl_mem), (void*)&cmNodRes_cache);
     ciErr1 |= clSetKernelArg(ckAmbigKernel, 3, sizeof(cl_mem), (void*)&cmNodFlag_cache);
     ciErr1 |= clSetKernelArg(ckAmbigKernel, 4, sizeof(cl_long), (void*)&tempSiteCount);
-    ciErr1 |= clSetKernelArg(ckAmbigKernel, 5, sizeof(cl_long), (void*)&tempCharCount);
-    ciErr1 |= clSetKernelArg(ckAmbigKernel, 6, sizeof(cl_long), (void*)&tempChildNodeIndex); // reset this in the loop
-    ciErr1 |= clSetKernelArg(ckAmbigKernel, 7, sizeof(cl_long), (void*)&tempParentNodeIndex); // reset this in the loop
-    ciErr1 |= clSetKernelArg(ckAmbigKernel, 8, sizeof(cl_long), (void*)&tempRoundCharCount);
-    ciErr1 |= clSetKernelArg(ckAmbigKernel, 9, sizeof(cl_int), (void*)&tempTagIntState);
+    ciErr1 |= clSetKernelArg(ckAmbigKernel, 5, sizeof(cl_short), (void*)&tempCharCount);
+    ciErr1 |= clSetKernelArg(ckAmbigKernel, 6, sizeof(cl_int), (void*)&tempChildNodeIndex); // reset this in the loop
+    ciErr1 |= clSetKernelArg(ckAmbigKernel, 7, sizeof(cl_int), (void*)&tempParentNodeIndex); // reset this in the loop
+    ciErr1 |= clSetKernelArg(ckAmbigKernel, 8, sizeof(cl_short), (void*)&tempRoundCharCount);
+    ciErr1 |= clSetKernelArg(ckAmbigKernel, 9, sizeof(cl_short), (void*)&tempTagIntState);
     ciErr1 |= clSetKernelArg(ckAmbigKernel, 10, sizeof(cl_int), (void*)&tempNodeID);
     ciErr1 |= clSetKernelArg(ckAmbigKernel, 11, sizeof(cl_mem), (void*)&cmScalings_cache);
     ciErr1 |= clSetKernelArg(ckAmbigKernel, 12, sizeof(cl_float), (void*)&tempScalar);
@@ -538,11 +538,11 @@ int _OCLEvaluator::setupContext(void)
     ciErr1 |= clSetKernelArg(ckInternalKernel, 1, sizeof(cl_mem), (void*)&cmModel_cache);
     ciErr1 |= clSetKernelArg(ckInternalKernel, 2, sizeof(cl_mem), (void*)&cmNodRes_cache);
     ciErr1 |= clSetKernelArg(ckInternalKernel, 3, sizeof(cl_long), (void*)&tempSiteCount);
-    ciErr1 |= clSetKernelArg(ckInternalKernel, 4, sizeof(cl_long), (void*)&tempCharCount);
-    ciErr1 |= clSetKernelArg(ckInternalKernel, 5, sizeof(cl_long), (void*)&tempChildNodeIndex); // reset this in the loop
-    ciErr1 |= clSetKernelArg(ckInternalKernel, 6, sizeof(cl_long), (void*)&tempParentNodeIndex); // reset this in the loop
-    ciErr1 |= clSetKernelArg(ckInternalKernel, 7, sizeof(cl_long), (void*)&tempRoundCharCount);
-    ciErr1 |= clSetKernelArg(ckInternalKernel, 8, sizeof(cl_int), (void*)&tempTagIntState); // reset this in the loop
+    ciErr1 |= clSetKernelArg(ckInternalKernel, 4, sizeof(cl_short), (void*)&tempCharCount);
+    ciErr1 |= clSetKernelArg(ckInternalKernel, 5, sizeof(cl_int), (void*)&tempChildNodeIndex); // reset this in the loop
+    ciErr1 |= clSetKernelArg(ckInternalKernel, 6, sizeof(cl_int), (void*)&tempParentNodeIndex); // reset this in the loop
+    ciErr1 |= clSetKernelArg(ckInternalKernel, 7, sizeof(cl_short), (void*)&tempRoundCharCount);
+    ciErr1 |= clSetKernelArg(ckInternalKernel, 8, sizeof(cl_short), (void*)&tempTagIntState); // reset this in the loop
     ciErr1 |= clSetKernelArg(ckInternalKernel, 9, sizeof(cl_int), (void*)&tempNodeID); // reset this in the loop
     ciErr1 |= clSetKernelArg(ckInternalKernel, 10, sizeof(cl_mem), (void*)&cmroot_cache);
     ciErr1 |= clSetKernelArg(ckInternalKernel, 11, sizeof(cl_mem), (void*)&cmScalings_cache);
@@ -556,9 +556,9 @@ int _OCLEvaluator::setupContext(void)
     ciErr1 |= clSetKernelArg(ckResultKernel, 3, sizeof(cl_mem), (void*)&cmroot_cache);
     ciErr1 |= clSetKernelArg(ckResultKernel, 4, sizeof(cl_mem), (void*)&cmroot_scalings);
     ciErr1 |= clSetKernelArg(ckResultKernel, 5, sizeof(cl_long), (void*)&tempSiteCount);
-    ciErr1 |= clSetKernelArg(ckResultKernel, 6, sizeof(cl_long), (void*)&tempRoundCharCount);
+    ciErr1 |= clSetKernelArg(ckResultKernel, 6, sizeof(cl_short), (void*)&tempRoundCharCount);
     ciErr1 |= clSetKernelArg(ckResultKernel, 7, sizeof(cl_float), (void*)&tempScalar);
-    ciErr1 |= clSetKernelArg(ckResultKernel, 8, sizeof(cl_long), (void*)&tempCharCount);
+    ciErr1 |= clSetKernelArg(ckResultKernel, 8, sizeof(cl_short), (void*)&tempCharCount);
 
     ciErr1 |= clSetKernelArg(ckReductionKernel, 0, sizeof(cl_mem), (void*)&cmResult_cache);
 
@@ -688,16 +688,16 @@ double _OCLEvaluator::oclmain(void)
     for (int nodeIndex = 0; nodeIndex < updateNodes.lLength; nodeIndex++)
     {
         //printf("NewNode\n");
-        long    nodeCode = updateNodes.lData[nodeIndex],
-                parentCode = flatParents.lData[nodeCode];
+        int    nodeCode = (int)updateNodes.lData[nodeIndex],
+                parentCode = (int)flatParents.lData[nodeCode];
 
         //printf("NewNode: %i, NodeCode: %i\n", nodeIndex, nodeCode);
         bool isLeaf = nodeCode < flatLeaves.lLength;
 
         if (isLeaf)
         {
-            long nodeCodeTemp = nodeCode;
-            int tempIntTagState = taggedInternals.lData[parentCode];
+            int nodeCodeTemp = nodeCode;
+            short tempIntTagState = taggedInternals.lData[parentCode];
             int ambig = 0;
             for (int aI = 0; aI < siteCount; aI++)
                 if (lNodeFlags[nodeCode*siteCount + aI] < 0)
@@ -706,9 +706,9 @@ double _OCLEvaluator::oclmain(void)
                     }
             if (!ambig)
             {
-                ciErr1 |= clSetKernelArg(ckLeafKernel, 6, sizeof(cl_long), (void*)&nodeCodeTemp);
-                ciErr1 |= clSetKernelArg(ckLeafKernel, 7, sizeof(cl_long), (void*)&parentCode);
-                ciErr1 |= clSetKernelArg(ckLeafKernel, 9, sizeof(cl_int), (void*)&tempIntTagState);
+                ciErr1 |= clSetKernelArg(ckLeafKernel, 6, sizeof(cl_int), (void*)&nodeCodeTemp);
+                ciErr1 |= clSetKernelArg(ckLeafKernel, 7, sizeof(cl_int), (void*)&parentCode);
+                ciErr1 |= clSetKernelArg(ckLeafKernel, 9, sizeof(cl_short), (void*)&tempIntTagState);
                 ciErr1 |= clSetKernelArg(ckLeafKernel, 10, sizeof(cl_int), (void*)&nodeIndex);
                 taggedInternals.lData[parentCode] = 1;
 
@@ -721,9 +721,9 @@ double _OCLEvaluator::oclmain(void)
             }
             else
             {
-                ciErr1 |= clSetKernelArg(ckAmbigKernel, 6, sizeof(cl_long), (void*)&nodeCodeTemp);
-                ciErr1 |= clSetKernelArg(ckAmbigKernel, 7, sizeof(cl_long), (void*)&parentCode);
-                ciErr1 |= clSetKernelArg(ckAmbigKernel, 9, sizeof(cl_int), (void*)&tempIntTagState);
+                ciErr1 |= clSetKernelArg(ckAmbigKernel, 6, sizeof(cl_int), (void*)&nodeCodeTemp);
+                ciErr1 |= clSetKernelArg(ckAmbigKernel, 7, sizeof(cl_int), (void*)&parentCode);
+                ciErr1 |= clSetKernelArg(ckAmbigKernel, 9, sizeof(cl_short), (void*)&tempIntTagState);
                 ciErr1 |= clSetKernelArg(ckAmbigKernel, 10, sizeof(cl_int), (void*)&nodeIndex);
                 taggedInternals.lData[parentCode] = 1;
 
@@ -741,13 +741,13 @@ double _OCLEvaluator::oclmain(void)
         }
         else
         {
-            long tempLeafState = 0;
+            //long tempLeafState = 0;
             nodeCode -= flatLeaves.lLength;
-            long nodeCodeTemp = nodeCode;
-            int tempIntTagState = taggedInternals.lData[parentCode];
-            ciErr1 |= clSetKernelArg(ckInternalKernel, 5, sizeof(cl_long), (void*)&nodeCodeTemp);
-            ciErr1 |= clSetKernelArg(ckInternalKernel, 6, sizeof(cl_long), (void*)&parentCode);
-            ciErr1 |= clSetKernelArg(ckInternalKernel, 8, sizeof(cl_int), (void*)&tempIntTagState);
+            int nodeCodeTemp = nodeCode;
+            short tempIntTagState = taggedInternals.lData[parentCode];
+            ciErr1 |= clSetKernelArg(ckInternalKernel, 5, sizeof(cl_int), (void*)&nodeCodeTemp);
+            ciErr1 |= clSetKernelArg(ckInternalKernel, 6, sizeof(cl_int), (void*)&parentCode);
+            ciErr1 |= clSetKernelArg(ckInternalKernel, 8, sizeof(cl_short), (void*)&tempIntTagState);
             ciErr1 |= clSetKernelArg(ckInternalKernel, 9, sizeof(cl_int), (void*)&nodeIndex);
             taggedInternals.lData[parentCode] = 1;
 #ifdef __VERBOSE__

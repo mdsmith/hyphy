@@ -4,11 +4,11 @@ __kernel void LeafKernel(  __global float* node_cache,                 // argume
                            __global const float* nodRes_cache,         // argument 2
                            __global const long* nodFlag_cache,         // argument 3
                            long sites,                                 // argument 4
-                           long characters,                            // argument 5
-                           long childNodeIndex,                        // argument 6
-                           long parentNodeIndex,                       // argument 7
-                           long roundCharacters,                       // argument 8
-                           int intTagState,                            // argument 9
+                           short characters,                            // argument 5
+                           int childNodeIndex,                        // argument 6
+                           int parentNodeIndex,                       // argument 7
+                           short roundCharacters,                       // argument 8
+                           short intTagState,                            // argument 9
                            int nodeID,                                 // argument 10
                            __global int* scalings,                     // argument 11
                            float scalar,                               // argument 12
@@ -40,11 +40,11 @@ __kernel void AmbigKernel(     __global float* node_cache,                 // ar
                                __global const float* nodRes_cache,         // argument 2
                                __global const long* nodFlag_cache,         // argument 3
                                long sites,                                 // argument 4
-                               long characters,                            // argument 5
-                               long childNodeIndex,                        // argument 6
-                               long parentNodeIndex,                       // argument 7
-                               long roundCharacters,                       // argument 8
-                               int intTagState,                            // argument 9
+                               short characters,                            // argument 5
+                               int childNodeIndex,                        // argument 6
+                               int parentNodeIndex,                       // argument 7
+                               short roundCharacters,                       // argument 8
+                               short intTagState,                            // argument 9
                                int nodeID,                                 // argument 10
                                __global int* scalings,                     // argument 11
                                float scalar,                               // argument 12
@@ -123,11 +123,11 @@ __kernel void InternalKernel(  __global float* node_cache,                 // ar
                                __global const float* model,                // argument 1
                                __global const float* nodRes_cache,         // argument 2
                                long sites,                                 // argument 3
-                               long characters,                            // argument 4
-                               long childNodeIndex,                        // argument 5
-                               long parentNodeIndex,                       // argument 6
-                               long roundCharacters,                       // argument 7
-                               int intTagState,                            // argument 8
+                               short characters,                            // argument 4
+                               int childNodeIndex,                        // argument 5
+                               int parentNodeIndex,                       // argument 6
+                               short roundCharacters,                       // argument 7
+                               short intTagState,                            // argument 8
                                int nodeID,                                 // argument 9
                                __global float* root_cache,                 // argument 10
                                __global int* scalings,                     // argument 11
@@ -192,9 +192,9 @@ __kernel void ResultKernel (   __global int* freq_cache,                   // ar
                                __global float* root_cache,                 // argument 3
                                __global int* root_scalings,                // argument 4
                                long sites,                                 // argument 5
-                               long roundCharacters,                       // argument 6
+                               short roundCharacters,                       // argument 6
                                float scalar,                               // argument 7
-                               long characters                             // argument 8
+                               short characters                             // argument 8
                            )
 {
    // shrink the work group to sites, rather than sites x characters
