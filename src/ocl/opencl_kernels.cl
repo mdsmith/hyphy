@@ -12,27 +12,36 @@ __kernel void LeafKernel(  __global float* node_cache,                 // argume
                            int nodeID,                                 // argument 10
                            __global int* scalings,                     // argument 11
                            float scalar,                               // argument 12
-                           float uFlowThresh                           // argument 13
+                           float uFlowThresh,                          // argument 13
+                           __global const int* leaf_list               // argument 14
                            )
 {
    int gx = get_global_id(0); // pchar
    if (gx > characters) return;
    int gy = get_global_id(1); // site
    if (gy > sites) return;
-   long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gy*roundCharacters + gx;
-   float privateParentScratch = 1.0f;
-   int scale = 0;
-   if (intTagState == 1)
+   int loopIndex = 0;
+   float4 idNcPcTag = leaf_list[loopIndex++*4];
+   while (idNcPcTag.x != -1)
    {
-       privateParentScratch = node_cache[parentCharacterIndex];
-       scale = scalings[parentCharacterIndex];
-   }
-   long siteState = nodFlag_cache[childNodeIndex*sites + gy];
-   privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + siteState*roundCharacters + gx];
-   if (gy < sites && gx < characters)
-   {
-       node_cache[parentCharacterIndex] = privateParentScratch;
-       scalings[parentCharacterIndex] = scale;
+       long parentCharacterIndex = idNcPcTag.z*sites*roundCharacters + gy*roundCharacters + gx;
+       float privateParentScratch = 1.0f;
+       int scale = 0;
+/*
+       if (idNcPcTag.w == 1)
+       {
+           privateParentScratch = node_cache[idNcPcTag.z];
+           scale = scalings[idNcPcTag.z];
+       }
+       long siteState = nodFlag_cache[idNcPcTag.y*sites + gy];
+       privateParentScratch *= model[idNcPcTag.x*roundCharacters*roundCharacters + siteState*roundCharacters + gx];
+       if (gy < sites && gx < characters)
+       {
+           node_cache[idNcPcTag.z] = privateParentScratch;
+           scalings[idNcPcTag.z] = scale;
+       }
+*/
+       float4 idNcPcTag = leaf_list[loopIndex++*4];
    }
 }
 __kernel void AmbigKernel(     __global float* node_cache,                 // argument 0

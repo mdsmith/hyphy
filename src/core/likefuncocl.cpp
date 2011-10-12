@@ -108,6 +108,7 @@ size_t szParmDataBytes;         // Byte size of context information
 size_t szKernelLength;          // Byte size of kernel code
 cl_int ciErr1, ciErr2;          // Error code var
 
+cl_mem cmLeaf_list;
 cl_mem cmNode_cache;
 cl_mem cmModel_cache;
 cl_mem cmNodRes_cache;
@@ -133,7 +134,17 @@ _SimpleList taggedInternals;
 _GrowingVector* lNodeResolutions;
 float scalar;
 
-void *node_cache, *nodRes_cache, *nodFlag_cache, *scalings_cache, *prob_cache, *freq_cache, *root_cache, *result_cache, *root_scalings, *model;
+void    *node_cache, 
+        *nodRes_cache, 
+        *nodFlag_cache, 
+        *scalings_cache, 
+        *prob_cache, 
+        *freq_cache, 
+        *root_cache, 
+        *result_cache, 
+        *root_scalings, 
+        *model,
+        *leaf_list;
 
 void _OCLEvaluator::init(   long esiteCount,
                                     long ealphabetDimension,
@@ -186,6 +197,7 @@ int _OCLEvaluator::setupContext(void)
     root_scalings   = (void*)malloc(sizeof(cl_int)*siteCount*roundCharacters);
     result_cache    = (void*)malloc(sizeof(clfp)*roundUpToNextPowerOfTwo(siteCount));
     model           = (void*)malloc(sizeof(cl_float)*roundCharacters*roundCharacters*(flatParents.lLength-1));
+    leaf_list       = (void*)malloc(sizeof(cl_int)*flatLeaves.lLength*4);
 
     //printf("Allocated all of the arrays!\n");
     //printf("setup the model, fixed tagged internals!\n");
@@ -342,6 +354,11 @@ int _OCLEvaluator::setupContext(void)
     cmFreq_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_ONLY,
                     sizeof(cl_float)*siteCount, NULL, &ciErr2);
     ciErr1 |= ciErr2;
+    cmLeaf_list = clCreateBuffer(cxGPUContext, CL_MEM_READ_ONLY,
+                    sizeof(cl_int)*flatLeaves.lLength*4, NULL, &ciErr2);
+    ciErr1 |= ciErr2;
+/*
+*/
     cmResult_cache = clCreateBuffer(cxGPUContext, CL_MEM_WRITE_ONLY,
                     sizeof(clfp)*roundUpToNextPowerOfTwo(siteCount), NULL, &ciErr2);
     ciErr1 |= ciErr2;
@@ -518,6 +535,7 @@ int _OCLEvaluator::setupContext(void)
     ciErr1 |= clSetKernelArg(ckLeafKernel, 11, sizeof(cl_mem), (void*)&cmScalings_cache);
     ciErr1 |= clSetKernelArg(ckLeafKernel, 12, sizeof(cl_float), (void*)&tempScalar);
     ciErr1 |= clSetKernelArg(ckLeafKernel, 13, sizeof(cl_float), (void*)&tempuFlowThresh);
+    ciErr1 |= clSetKernelArg(ckLeafKernel, 14, sizeof(cl_mem), (void*)&cmLeaf_list);
 
     ciErr1 |= clSetKernelArg(ckAmbigKernel, 0, sizeof(cl_mem), (void*)&cmNode_cache);
     ciErr1 |= clSetKernelArg(ckAmbigKernel, 1, sizeof(cl_mem), (void*)&cmModel_cache);
@@ -619,7 +637,15 @@ double _OCLEvaluator::oclmain(void)
     //printf("updateNodes.lLength: %i", updateNodes.lLength);
     //#pragma omp parallel for default(none) shared(updateNodes, flatParents, flatLeaves, flatCLeaves, flatTree, alphabetDimension, model, roundCharacters) private(nodeCode, parentCode, isLeaf, tMatrix, a1, a2)
 
+    for (int i = 0; i < flatLeaves.lLength*4; i++) 
+    {
+        ((int*)leaf_list)[i] = -1;
+    }
+/*
+*/
+
     // rebuild the model cache and move it over to the GPU
+    int leafListIndex = 0;
     for (int nodeID = 0; nodeID < updateNodes.lLength; nodeID++)
     {
         nodeCode = updateNodes.lData[nodeID];
@@ -628,6 +654,16 @@ double _OCLEvaluator::oclmain(void)
         isLeaf = nodeCode < flatLeaves.lLength;
 
         if (!isLeaf) nodeCode -= flatLeaves.lLength;
+        else
+        {
+            ((int*)leaf_list)[leafListIndex++]=(int)nodeID;
+            ((int*)leaf_list)[leafListIndex++]=(int)nodeCode;
+            ((int*)leaf_list)[leafListIndex++]=(int)parentCode;
+            ((int*)leaf_list)[leafListIndex++]=(int)taggedInternals.lData[parentCode];
+            taggedInternals.lData[parentCode] = 1;
+/*
+*/
+        }
 
         tMatrix = (isLeaf? ((_CalcNode*) flatCLeaves (nodeCode)):
                    ((_CalcNode*) flatTree    (nodeCode)))->GetCompExp(0)->theData;
@@ -647,6 +683,9 @@ double _OCLEvaluator::oclmain(void)
     ciErr1 |= clEnqueueWriteBuffer(cqCommandQueue, cmModel_cache, CL_FALSE, 0,
                 sizeof(cl_float)*roundCharacters*roundCharacters*(flatParents.lLength-1),
                 model, 0, NULL, NULL);
+    ciErr1 |= clEnqueueWriteBuffer(cqCommandQueue, cmLeaf_list, CL_FALSE, 0,
+                sizeof(cl_int)*flatLeaves.lLength*4,
+                leaf_list, 0, NULL, NULL);
 #ifdef __OCLPOSIX__
     clock_gettime(CLOCK_MONOTONIC, &bufferEnd);
     buffSecs += (bufferEnd.tv_sec - bufferStart.tv_sec)+(bufferEnd.tv_nsec - bufferStart.tv_nsec)/BILLION;
@@ -693,9 +732,18 @@ double _OCLEvaluator::oclmain(void)
 
         //printf("NewNode: %i, NodeCode: %i\n", nodeIndex, nodeCode);
         bool isLeaf = nodeCode < flatLeaves.lLength;
+        bool leafLaunched = false;
 
-        if (isLeaf)
+        if (isLeaf && !leafLaunched)// add no ambigs condition and check during setup for ambigs. 
         {
+            ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue, ckLeafKernel, 2, NULL,
+                                            szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
+            leafLaunched = true;
+            continue;
+
+
+
+
             long nodeCodeTemp = nodeCode;
             int tempIntTagState = taggedInternals.lData[parentCode];
             int ambig = 0;
@@ -706,11 +754,13 @@ double _OCLEvaluator::oclmain(void)
                     }
             if (!ambig)
             {
+/*
                 ciErr1 |= clSetKernelArg(ckLeafKernel, 6, sizeof(cl_long), (void*)&nodeCodeTemp);
                 ciErr1 |= clSetKernelArg(ckLeafKernel, 7, sizeof(cl_long), (void*)&parentCode);
                 ciErr1 |= clSetKernelArg(ckLeafKernel, 9, sizeof(cl_int), (void*)&tempIntTagState);
                 ciErr1 |= clSetKernelArg(ckLeafKernel, 10, sizeof(cl_int), (void*)&nodeIndex);
                 taggedInternals.lData[parentCode] = 1;
+*/
 
                 //printf("Leaf!\n");
 #ifdef __VERBOSE__
