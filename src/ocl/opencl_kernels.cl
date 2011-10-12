@@ -20,14 +20,14 @@ __kernel void LeafKernel(  __global float* node_cache,                 // argume
    if (gx > characters) return;
    int gy = get_global_id(1); // site
    if (gy > sites) return;
-   int loopIndex = 0;
-   float4 idNcPcTag = leaf_list[loopIndex++*4];
+   int4 idNcPcTag = vload4(0, leaf_list);
    while (idNcPcTag.x != -1)
    {
-       long parentCharacterIndex = idNcPcTag.z*sites*roundCharacters + gy*roundCharacters + gx;
+       leaf_list = leaf_list + 4;
+/*
+       long parentCharacterIndex = idNcPcTag.z *sites*roundCharacters + gy*roundCharacters + gx;
        float privateParentScratch = 1.0f;
        int scale = 0;
-/*
        if (idNcPcTag.w == 1)
        {
            privateParentScratch = node_cache[idNcPcTag.z];
@@ -41,7 +41,7 @@ __kernel void LeafKernel(  __global float* node_cache,                 // argume
            scalings[idNcPcTag.z] = scale;
        }
 */
-       float4 idNcPcTag = leaf_list[loopIndex++*4];
+       int4 idNcPcTag = vload4(0, leaf_list);
    }
 }
 __kernel void AmbigKernel(     __global float* node_cache,                 // argument 0

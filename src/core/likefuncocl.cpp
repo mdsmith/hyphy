@@ -398,6 +398,7 @@ int _OCLEvaluator::setupContext(void)
         Cleanup(EXIT_FAILURE);
     }
 
+// TODO hangs here
     ciErr1 = clBuildProgram(cpMLProgram, 1, &cdDevice, "-cl-mad-enable -cl-fast-relaxed-math", NULL, NULL);
     //ciErr1 = clBuildProgram(cpMLProgram, 1, &cdDevice, NULL, NULL, NULL);
     if (ciErr1 != CL_SUCCESS)
@@ -580,7 +581,7 @@ int _OCLEvaluator::setupContext(void)
 
     ciErr1 |= clSetKernelArg(ckReductionKernel, 0, sizeof(cl_mem), (void*)&cmResult_cache);
 
-    //printf("clSetKernelArg 0 - 12...\n\n");
+    printf("clSetKernelArg 0 - 12...\n\n");
     if (ciErr1 != CL_SUCCESS)
     {
         printf("Error in clSetKernelArg, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
@@ -724,6 +725,7 @@ double _OCLEvaluator::oclmain(void)
 #endif
     //printf("Finished writing the model stuff\n");
     // Launch kernel
+    bool leafLaunched = false;
     for (int nodeIndex = 0; nodeIndex < updateNodes.lLength; nodeIndex++)
     {
         //printf("NewNode\n");
@@ -732,13 +734,13 @@ double _OCLEvaluator::oclmain(void)
 
         //printf("NewNode: %i, NodeCode: %i\n", nodeIndex, nodeCode);
         bool isLeaf = nodeCode < flatLeaves.lLength;
-        bool leafLaunched = false;
 
         if (isLeaf && !leafLaunched)// add no ambigs condition and check during setup for ambigs. 
         {
             ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue, ckLeafKernel, 2, NULL,
                                             szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
             leafLaunched = true;
+            //printf("Leaf!\n");
             continue;
 
 
@@ -762,7 +764,6 @@ double _OCLEvaluator::oclmain(void)
                 taggedInternals.lData[parentCode] = 1;
 */
 
-                //printf("Leaf!\n");
 #ifdef __VERBOSE__
                 printf("Leaf/Ambig Started (ParentCode: %i)...", parentCode);
 #endif
