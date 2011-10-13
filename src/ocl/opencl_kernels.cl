@@ -22,16 +22,34 @@ __kernel void LeafKernel(  __global float* node_cache,                 // argume
    if (gy > sites) return;
    int indexer = 0;
    int nID = leaf_list[indexer++];
-   int cNindex = leaf_list[indexer++];
-   int pNindex = leaf_list[indexer++];
-   int tag = leaf_list[indexer++];
+   indexer += 3;
+   //int cNindex = leaf_list[indexer++];
+   //int pNindex = leaf_list[indexer++];
+   //int tag = leaf_list[indexer++];
    while(nID != -1)
    {
-        
+/*
+       long parentCharacterIndex = pNindex *sites*roundCharacters + gy*roundCharacters + gx;
+       float privateParentScratch = 1.0f;
+       int scale = 0;
+       if (tag == 1)
+       {
+           privateParentScratch = node_cache[pNindex];
+           scale = scalings[pNindex];
+       }
+       long siteState = nodFlag_cache[cNindex*sites + gy];
+       privateParentScratch *= model[nID*roundCharacters*roundCharacters + siteState*roundCharacters + gx];
+       if (gy < sites && gx < characters)
+       {
+           node_cache[pNindex] = privateParentScratch;
+           scalings[pNindex] = scale;
+       }
+*/
        nID = leaf_list[indexer++];
-       cNindex = leaf_list[indexer++];
-       pNindex = leaf_list[indexer++];
-       tag = leaf_list[indexer++];
+       indexer += 3;
+       //cNindex = leaf_list[indexer++];
+       //pNindex = leaf_list[indexer++];
+       //tag = leaf_list[indexer++];
    }
 /*
    int4 idNcPcTag = vload4(0, leaf_list);
