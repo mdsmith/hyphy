@@ -703,6 +703,7 @@ double _OCLEvaluator::oclmain(void)
                 if (lNodeFlags[nodeCode*siteCount + aI] < 0)
                     {
                         ambig = 1;
+                        break;
                     }
             if (!ambig)
             {
