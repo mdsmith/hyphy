@@ -92,10 +92,10 @@ cl_command_queue cqCommandQueue;// OpenCL command que
 cl_platform_id cpPlatform;      // OpenCL platform
 cl_device_id cdDevice;          // OpenCL device
 cl_program cpMLProgram;
-cl_program cpLeafProgram;
-cl_program cpInternalProgram;
-cl_program cpAmbigProgram;
-cl_program cpResultProgram;
+//cl_program cpLeafProgram;
+//cl_program cpInternalProgram;
+//cl_program cpAmbigProgram;
+//cl_program cpResultProgram;
 cl_kernel ckLeafKernel;
 cl_kernel ckInternalKernel;
 cl_kernel ckAmbigKernel;
@@ -107,6 +107,7 @@ size_t localMemorySize;         // size of local memory buffer for kernel scratc
 size_t szParmDataBytes;         // Byte size of context information
 size_t szKernelLength;          // Byte size of kernel code
 cl_int ciErr1, ciErr2;          // Error code var
+cl_int count;
 
 cl_mem cmNode_cache;
 cl_mem cmModel_cache;
@@ -159,6 +160,7 @@ void _OCLEvaluator::init(   long esiteCount,
 // *********************************************************************
 int _OCLEvaluator::setupContext(void)
 {
+    cl_event tempEvent;
 #ifdef __OCLPOSIX__
     clock_gettime(CLOCK_MONOTONIC, &setupStart);
 #endif
@@ -314,9 +316,13 @@ int _OCLEvaluator::setupContext(void)
 
     // Allocate the OpenCL buffer memory objects for the input and output on the
     // device GMEM
+    clGetMemObjectInfo(cmNode_cache, CL_MEM_REFERENCE_COUNT, sizeof(cl_int), &count, NULL);
+    printf("refCount pre = %d\n", count);
     cmNode_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR,
                     sizeof(cl_float)*roundCharacters*siteCount*(flatNodes.lLength), node_cache,
                     &ciErr1);
+    clGetMemObjectInfo(cmNode_cache, CL_MEM_REFERENCE_COUNT, sizeof(cl_int), &count, NULL);
+    printf("refCount made = %d\n", count);
     cmModel_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_ONLY,
                     sizeof(cl_float)*roundCharacters*roundCharacters*(flatParents.lLength-1),
                     NULL, &ciErr2);
@@ -573,7 +579,8 @@ int _OCLEvaluator::setupContext(void)
     // Start Core sequence... copy input data to GPU, compute, copy results back
     // Asynchronous write of data to GPU device
     ciErr1 |= clEnqueueWriteBuffer(cqCommandQueue, cmFreq_cache, CL_FALSE, 0,
-                sizeof(cl_int)*siteCount, freq_cache, 0, NULL, NULL);
+                sizeof(cl_int)*siteCount, freq_cache, 0, NULL, &tempEvent);
+    clReleaseEvent(tempEvent);
     //printf("clEnqueueWriteBuffer (root_cache, etc.)...");
     if (ciErr1 != CL_SUCCESS)
     {
@@ -589,6 +596,9 @@ int _OCLEvaluator::setupContext(void)
 
 double _OCLEvaluator::oclmain(void)
 {
+    clGetMemObjectInfo(cmNode_cache, CL_MEM_REFERENCE_COUNT, sizeof(cl_int), &count, NULL);
+    printf("refCount newLF = %d\n", count);
+    cl_event tempEvent;
     //printf("newLF!\n");
     //printf("LF");
     // so far this wholebuffer rebuild takes almost no time at all. Perhaps not true re:queue
@@ -646,7 +656,8 @@ double _OCLEvaluator::oclmain(void)
     // with no queueing, however, we still only see ~700lf/s, which isn't much better than the threaded CPU code.
     ciErr1 |= clEnqueueWriteBuffer(cqCommandQueue, cmModel_cache, CL_FALSE, 0,
                 sizeof(cl_float)*roundCharacters*roundCharacters*(flatParents.lLength-1),
-                model, 0, NULL, NULL);
+                model, 0, NULL, &tempEvent);
+    clReleaseEvent(tempEvent);
 #ifdef __OCLPOSIX__
     clock_gettime(CLOCK_MONOTONIC, &bufferEnd);
     buffSecs += (bufferEnd.tv_sec - bufferStart.tv_sec)+(bufferEnd.tv_nsec - bufferStart.tv_nsec)/BILLION;
@@ -687,6 +698,8 @@ double _OCLEvaluator::oclmain(void)
     // Launch kernel
     for (int nodeIndex = 0; nodeIndex < updateNodes.lLength; nodeIndex++)
     {
+        clGetMemObjectInfo(cmNode_cache, CL_MEM_REFERENCE_COUNT, sizeof(cl_int), &count, NULL);
+        printf("refCount newNode= %d\n", count);
         //printf("NewNode\n");
         long    nodeCode = updateNodes.lData[nodeIndex],
                 parentCode = flatParents.lData[nodeCode];
@@ -733,7 +746,8 @@ double _OCLEvaluator::oclmain(void)
                 printf("Leaf/Ambig Started ...");
 #endif
                 ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue, ckAmbigKernel, 2, NULL,
-                                                szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
+                                                szGlobalWorkSize, szLocalWorkSize, 0, NULL, &tempEvent);
+                clReleaseEvent(tempEvent);
             }
             ciErr1 |= clFlush(cqCommandQueue);
 #ifdef __VERBOSE__
@@ -755,7 +769,8 @@ double _OCLEvaluator::oclmain(void)
             printf("Internal Started (ParentCode: %i)...", parentCode);
 #endif
             ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue, ckInternalKernel, 2, NULL,
-                                            szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
+                                            szGlobalWorkSize, szLocalWorkSize, 0, NULL, &tempEvent);
+            clReleaseEvent(tempEvent);
 
             //printf("internal!\n");
             ciErr1 |= clFlush(cqCommandQueue);
@@ -793,12 +808,15 @@ double _OCLEvaluator::oclmain(void)
 	size_t szGlobalWorkSize2 = 256;
 	size_t szLocalWorkSize2 = 256;
     ciErr1 |= clEnqueueNDRangeKernel(cqCommandQueue, ckResultKernel, 1, NULL,
-        &szGlobalWorkSize2, &szLocalWorkSize2, 0, NULL, NULL);
+        &szGlobalWorkSize2, &szLocalWorkSize2, 0, NULL, &tempEvent);
+    clReleaseEvent(tempEvent);
     ciErr1 |= clEnqueueNDRangeKernel(cqCommandQueue, ckReductionKernel, 1, NULL,
-        &szGlobalWorkSize2, &szLocalWorkSize2, 0, NULL, NULL);
+        &szGlobalWorkSize2, &szLocalWorkSize2, 0, NULL, &tempEvent);
+    clReleaseEvent(tempEvent);
 #else
     ciErr1 |= clEnqueueNDRangeKernel(cqCommandQueue, ckResultKernel, 2, NULL,
-        szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
+        szGlobalWorkSize, szLocalWorkSize, 0, NULL, &tempEvent);
+    clReleaseEvent(tempEvent);
 #endif
     if (ciErr1 != CL_SUCCESS)
     {
@@ -833,7 +851,8 @@ double _OCLEvaluator::oclmain(void)
       //      NULL, NULL);
     ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALE, 0,
             sizeof(clfp), result_cache, 0,
-            NULL, NULL);
+            NULL, &tempEvent);
+    clReleaseEvent(tempEvent);
     //ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
      //       sizeof(cl_double)*1, result_cache, 0,
       //      NULL, NULL);
@@ -846,7 +865,8 @@ double _OCLEvaluator::oclmain(void)
       //      NULL, NULL);
     ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
             sizeof(clfp)*roundUpToNextPowerOfTwo(siteCount), result_cache, 0,
-            NULL, NULL);
+            NULL, &tempEvent);
+    clReleaseEvent(tempEvent);
 #endif
 /*
     ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
@@ -876,7 +896,11 @@ double _OCLEvaluator::oclmain(void)
     //--------------------------------------------------------
 
 
+    clGetMemObjectInfo(cmNode_cache, CL_MEM_REFERENCE_COUNT, sizeof(cl_int), &count, NULL);
+    printf("refCount preFinish = %d\n", count);
     clFinish(cqCommandQueue);
+    clGetMemObjectInfo(cmNode_cache, CL_MEM_REFERENCE_COUNT, sizeof(cl_int), &count, NULL);
+    printf("refCount postFinish = %d\n", count);
     double oResult = 0.0;
 
 #ifdef __OCLPOSIX__
@@ -1014,14 +1038,20 @@ void _OCLEvaluator::Cleanup (int iExitCode)
         if(ckInternalKernel)clReleaseKernel(ckInternalKernel);
         if(ckAmbigKernel)clReleaseKernel(ckAmbigKernel);
         if(ckResultKernel)clReleaseKernel(ckResultKernel);
-        if(cpLeafProgram)clReleaseProgram(cpLeafProgram);
-        if(cpInternalProgram)clReleaseProgram(cpInternalProgram);
-        if(cpAmbigProgram)clReleaseProgram(cpAmbigProgram);
-        if(cpResultProgram)clReleaseProgram(cpResultProgram);
+        if(ckReductionKernel)clReleaseKernel(ckReductionKernel);
+        //if(cpLeafProgram)clReleaseProgram(cpLeafProgram);
+        //if(cpInternalProgram)clReleaseProgram(cpInternalProgram);
+        //if(cpAmbigProgram)clReleaseProgram(cpAmbigProgram);
+        //if(cpResultProgram)clReleaseProgram(cpResultProgram);
+        if(cpMLProgram)clReleaseProgram(cpMLProgram);
         if(cqCommandQueue)clReleaseCommandQueue(cqCommandQueue);
         printf("Halfway...\n\n");
         if(cxGPUContext)clReleaseContext(cxGPUContext);
+        clGetMemObjectInfo(cmNode_cache, CL_MEM_REFERENCE_COUNT, sizeof(cl_int), &count, NULL);
+        printf("refCount preFree = %d\n", count);
         if(cmNode_cache)clReleaseMemObject(cmNode_cache);
+        clGetMemObjectInfo(cmNode_cache, CL_MEM_REFERENCE_COUNT, sizeof(cl_int), &count, NULL);
+        printf("refCount postFree = %d\n", count);
         if(cmModel_cache)clReleaseMemObject(cmModel_cache);
         if(cmNodRes_cache)clReleaseMemObject(cmNodRes_cache);
         if(cmNodFlag_cache)clReleaseMemObject(cmNodFlag_cache);
