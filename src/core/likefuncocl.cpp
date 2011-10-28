@@ -316,13 +316,9 @@ int _OCLEvaluator::setupContext(void)
 
     // Allocate the OpenCL buffer memory objects for the input and output on the
     // device GMEM
-    clGetMemObjectInfo(cmNode_cache, CL_MEM_REFERENCE_COUNT, sizeof(cl_int), &count, NULL);
-    printf("refCount pre = %d\n", count);
     cmNode_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR,
                     sizeof(cl_float)*roundCharacters*siteCount*(flatNodes.lLength), node_cache,
                     &ciErr1);
-    clGetMemObjectInfo(cmNode_cache, CL_MEM_REFERENCE_COUNT, sizeof(cl_int), &count, NULL);
-    printf("refCount made = %d\n", count);
     cmModel_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_ONLY,
                     sizeof(cl_float)*roundCharacters*roundCharacters*(flatParents.lLength-1),
                     NULL, &ciErr2);
@@ -596,8 +592,6 @@ int _OCLEvaluator::setupContext(void)
 
 double _OCLEvaluator::oclmain(void)
 {
-    clGetMemObjectInfo(cmNode_cache, CL_MEM_REFERENCE_COUNT, sizeof(cl_int), &count, NULL);
-    printf("refCount newLF = %d\n", count);
     cl_event tempEvent;
     //printf("newLF!\n");
     //printf("LF");
@@ -698,8 +692,6 @@ double _OCLEvaluator::oclmain(void)
     // Launch kernel
     for (int nodeIndex = 0; nodeIndex < updateNodes.lLength; nodeIndex++)
     {
-        clGetMemObjectInfo(cmNode_cache, CL_MEM_REFERENCE_COUNT, sizeof(cl_int), &count, NULL);
-        printf("refCount newNode= %d\n", count);
         //printf("NewNode\n");
         long    nodeCode = updateNodes.lData[nodeIndex],
                 parentCode = flatParents.lData[nodeCode];
@@ -896,11 +888,7 @@ double _OCLEvaluator::oclmain(void)
     //--------------------------------------------------------
 
 
-    clGetMemObjectInfo(cmNode_cache, CL_MEM_REFERENCE_COUNT, sizeof(cl_int), &count, NULL);
-    printf("refCount preFinish = %d\n", count);
     clFinish(cqCommandQueue);
-    clGetMemObjectInfo(cmNode_cache, CL_MEM_REFERENCE_COUNT, sizeof(cl_int), &count, NULL);
-    printf("refCount postFinish = %d\n", count);
     double oResult = 0.0;
 
 #ifdef __OCLPOSIX__
@@ -1047,11 +1035,8 @@ void _OCLEvaluator::Cleanup (int iExitCode)
         if(cqCommandQueue)clReleaseCommandQueue(cqCommandQueue);
         printf("Halfway...\n\n");
         if(cxGPUContext)clReleaseContext(cxGPUContext);
-        clGetMemObjectInfo(cmNode_cache, CL_MEM_REFERENCE_COUNT, sizeof(cl_int), &count, NULL);
-        printf("refCount preFree = %d\n", count);
+
         if(cmNode_cache)clReleaseMemObject(cmNode_cache);
-        clGetMemObjectInfo(cmNode_cache, CL_MEM_REFERENCE_COUNT, sizeof(cl_int), &count, NULL);
-        printf("refCount postFree = %d\n", count);
         if(cmModel_cache)clReleaseMemObject(cmModel_cache);
         if(cmNodRes_cache)clReleaseMemObject(cmNodRes_cache);
         if(cmNodFlag_cache)clReleaseMemObject(cmNodFlag_cache);
@@ -1061,6 +1046,29 @@ void _OCLEvaluator::Cleanup (int iExitCode)
         if(cmFreq_cache)clReleaseMemObject(cmFreq_cache);
         if(cmProb_cache)clReleaseMemObject(cmProb_cache);
         if(cmResult_cache)clReleaseMemObject(cmResult_cache);
+
+        /*
+        clGetMemObjectInfo(cmNode_cache, CL_MEM_REFERENCE_COUNT, sizeof(cl_int), &count, NULL);
+        printf("refCount nodeCache = %d\n", count);
+        clGetMemObjectInfo(cmModel_cache, CL_MEM_REFERENCE_COUNT, sizeof(cl_int), &count, NULL);
+        printf("refCount ModelCache = %d\n", count);
+        clGetMemObjectInfo(cmNodRes_cache, CL_MEM_REFERENCE_COUNT, sizeof(cl_int), &count, NULL);
+        printf("refCount nodResCache = %d\n", count);
+        clGetMemObjectInfo(cmNodFlag_cache, CL_MEM_REFERENCE_COUNT, sizeof(cl_int), &count, NULL);
+        printf("refCount nodFlagCache = %d\n", count);
+        clGetMemObjectInfo(cmroot_cache, CL_MEM_REFERENCE_COUNT, sizeof(cl_int), &count, NULL);
+        printf("refCount rootCache = %d\n", count);
+        clGetMemObjectInfo(cmroot_scalings, CL_MEM_REFERENCE_COUNT, sizeof(cl_int), &count, NULL);
+        printf("refCount cmroot_scalings = %d\n", count);
+        clGetMemObjectInfo(cmScalings_cache, CL_MEM_REFERENCE_COUNT, sizeof(cl_int), &count, NULL);
+        printf("refCount cmScalings_cache = %d\n", count);
+        clGetMemObjectInfo(cmFreq_cache, CL_MEM_REFERENCE_COUNT, sizeof(cl_int), &count, NULL);
+        printf("refCount cmFreq_cache = %d\n", count);
+        clGetMemObjectInfo(cmProb_cache, CL_MEM_REFERENCE_COUNT, sizeof(cl_int), &count, NULL);
+        printf("refCount cmProb_cache = %d\n", count);
+        clGetMemObjectInfo(cmResult_cache, CL_MEM_REFERENCE_COUNT, sizeof(cl_int), &count, NULL);
+        printf("refCount cmResult_cache = %d\n", count);
+        */
         printf("Done with ocl stuff...\n\n");
         // Free host memory
         free(node_cache);
