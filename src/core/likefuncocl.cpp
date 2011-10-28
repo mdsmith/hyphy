@@ -33,6 +33,7 @@ typedef cl_float clfp;
 //#define PRAGMADEF "#pragma OPENCL EXTENSION cl_khr_fp64: enable \n"
 #define PRAGMADEF " \n"
 //#pragma OPENCL EXTENSION cl_khr_fp64: enable
+
 #elif defined(__NVIDIAOCL__)
 #define __GPUResults__
 #define __OCLPOSIX__
@@ -43,8 +44,9 @@ typedef cl_double clfp;
 #define FLOATPREC "typedef double fpoint; \n"
 #define PRAGMADEF "#pragma OPENCL EXTENSION cl_khr_fp64: enable \n"
 #pragma OPENCL EXTENSION cl_khr_fp64: enable
+
 #elif defined(__AMDOCL__) 
-#define __GPUResults__
+//#define __GPUResults__
 #define __OCLPOSIX__
 #include <CL/opencl.h>
 typedef double fpoint;
@@ -52,6 +54,7 @@ typedef cl_double clfp;
 #define FLOATPREC "typedef double fpoint; \n"
 #define PRAGMADEF "#pragma OPENCL EXTENSION cl_amd_fp64: enable \n"
 #pragma OPENCL EXTENSION cl_amd_fp64: enable
+
 #elif defined(FLOAT)
 #include <CL/opencl.h>
 typedef float fpoint;
@@ -1033,8 +1036,8 @@ void _OCLEvaluator::Cleanup (int iExitCode)
         //if(cpResultProgram)clReleaseProgram(cpResultProgram);
         if(cpMLProgram)clReleaseProgram(cpMLProgram);
         if(cqCommandQueue)clReleaseCommandQueue(cqCommandQueue);
-        printf("Halfway...\n\n");
         if(cxGPUContext)clReleaseContext(cxGPUContext);
+        printf("Halfway...\n\n");
 
         if(cmNode_cache)clReleaseMemObject(cmNode_cache);
         if(cmModel_cache)clReleaseMemObject(cmModel_cache);
@@ -1046,6 +1049,7 @@ void _OCLEvaluator::Cleanup (int iExitCode)
         if(cmFreq_cache)clReleaseMemObject(cmFreq_cache);
         if(cmProb_cache)clReleaseMemObject(cmProb_cache);
         if(cmResult_cache)clReleaseMemObject(cmResult_cache);
+
 
         /*
         clGetMemObjectInfo(cmNode_cache, CL_MEM_REFERENCE_COUNT, sizeof(cl_int), &count, NULL);
