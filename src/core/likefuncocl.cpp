@@ -122,6 +122,7 @@ cl_mem cmScalings_cache;
 cl_mem cmFreq_cache;
 cl_mem cmProb_cache;
 cl_mem cmResult_cache;
+cl_mem cmLeafInfo_cache;
 long siteCount, alphabetDimension;
 long* lNodeFlags;
 _SimpleList     updateNodes,
@@ -137,7 +138,17 @@ _SimpleList taggedInternals;
 _GrowingVector* lNodeResolutions;
 float scalar;
 
-void *node_cache, *nodRes_cache, *nodFlag_cache, *scalings_cache, *prob_cache, *freq_cache, *root_cache, *result_cache, *root_scalings, *model;
+void *node_cache, 
+     *nodRes_cache, 
+     *nodFlag_cache, 
+     *scalings_cache, 
+     *prob_cache, 
+     *freq_cache, 
+     *root_cache, 
+     *result_cache, 
+     *root_scalings, 
+     *model,
+     *leafInfo;
 
 void _OCLEvaluator::init(   long esiteCount,
                                     long ealphabetDimension,
@@ -191,6 +202,7 @@ int _OCLEvaluator::setupContext(void)
     root_scalings   = (void*)malloc(sizeof(cl_int)*siteCount*roundCharacters);
     result_cache    = (void*)malloc(sizeof(clfp)*roundUpToNextPowerOfTwo(siteCount));
     model           = (void*)malloc(sizeof(cl_float)*roundCharacters*roundCharacters*(flatParents.lLength-1));
+    leafInfo        = (void*)malloc(sizeof(cl_int)*4*updateNodes.lLength);
 
     //printf("Allocated all of the arrays!\n");
     //printf("setup the model, fixed tagged internals!\n");
@@ -214,6 +226,8 @@ int _OCLEvaluator::setupContext(void)
         ((int*)freq_cache)[i] = theFrequencies[i];
     for (int i = 0; i < alphabetDimension; i++)
         ((float*)prob_cache)[i] = theProbs[i];
+    for (int i = 0; i < 4*updateNodes.lLength; i++ )
+        ((int*)leafInfo)[i] = 1;
 
     //printf("Created all of the arrays!\n");
 
@@ -349,6 +363,9 @@ int _OCLEvaluator::setupContext(void)
     ciErr1 |= ciErr2;
     cmResult_cache = clCreateBuffer(cxGPUContext, CL_MEM_WRITE_ONLY,
                     sizeof(clfp)*roundUpToNextPowerOfTwo(siteCount), NULL, &ciErr2);
+    ciErr1 |= ciErr2;
+    cmLeafInfo_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR,
+                    sizeof(cl_int)*4*updateNodes.lLength, leafInfo, &ciErr2);
     ciErr1 |= ciErr2;
 //    printf("clCreateBuffer...\n");
     if (ciErr1 != CL_SUCCESS)
@@ -523,6 +540,7 @@ int _OCLEvaluator::setupContext(void)
     ciErr1 |= clSetKernelArg(ckLeafKernel, 11, sizeof(cl_mem), (void*)&cmScalings_cache);
     ciErr1 |= clSetKernelArg(ckLeafKernel, 12, sizeof(cl_float), (void*)&tempScalar);
     ciErr1 |= clSetKernelArg(ckLeafKernel, 13, sizeof(cl_float), (void*)&tempuFlowThresh);
+    ciErr1 |= clSetKernelArg(ckLeafKernel, 14, sizeof(cl_mem), (void*)&cmLeafInfo_cache);
 
     ciErr1 |= clSetKernelArg(ckAmbigKernel, 0, sizeof(cl_mem), (void*)&cmNode_cache);
     ciErr1 |= clSetKernelArg(ckAmbigKernel, 1, sizeof(cl_mem), (void*)&cmModel_cache);
@@ -704,6 +722,7 @@ double _OCLEvaluator::oclmain(void)
 
         if (isLeaf)
         {
+
             long nodeCodeTemp = nodeCode;
             int tempIntTagState = taggedInternals.lData[parentCode];
             int ambig = 0;
@@ -713,6 +732,10 @@ double _OCLEvaluator::oclmain(void)
                         ambig = 1;
                         break;
                     }
+            ((int*)leafInfo)[nodeIndex*4] = nodeIndex;
+            ((int*)leafInfo)[nodeIndex*4+1] = parentCode;
+            ((int*)leafInfo)[nodeIndex*4+2] = nodeCode;
+            ((int*)leafInfo)[nodeIndex*4+3] = tempIntTagState;
             if (!ambig)
             {
                 ciErr1 |= clSetKernelArg(ckLeafKernel, 6, sizeof(cl_long), (void*)&nodeCodeTemp);

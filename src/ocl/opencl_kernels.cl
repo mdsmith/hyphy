@@ -12,13 +12,19 @@ __kernel void LeafKernel(  __global float* node_cache,                 // argume
                            int nodeID,                                 // argument 10
                            __global int* scalings,                     // argument 11
                            float scalar,                               // argument 12
-                           float uFlowThresh                           // argument 13
+                           float uFlowThresh,                          // argument 13
+                           __global const int* leafInfo                // argument 13
                            )
 {
+   // leafinfo: NodeID, Parent, child, tagstate
    int gx = get_global_id(0); // pchar
    if (gx > characters) return;
    int gy = get_global_id(1); // site
    if (gy > sites) return;
+   //nodeID = leafInfo[nodeID*4];
+   //parentNodeIndex = leafInfo[nodeID*4+1];
+   //childNodeIndex = leafInfo[nodeID*4+2];
+   //intTagState = leafInfo[nodeID*4+3];
    long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gy*roundCharacters + gx;
    float privateParentScratch = 1.0f;
    int scale = 0;
