@@ -13,7 +13,8 @@ __kernel void LeafKernel(  __global float* node_cache,                 // argume
                            __global int* scalings,                     // argument 11
                            float scalar,                               // argument 12
                            float uFlowThresh,                          // argument 13
-                           __global const int* leafInfo                // argument 13
+                           __global const int* leafInfo,               // argument 14
+                           int leafNumber                              // argument 15
                            )
 {
    // leafinfo: NodeID, Parent, child, tagstate
@@ -21,24 +22,27 @@ __kernel void LeafKernel(  __global float* node_cache,                 // argume
    if (gx > characters) return;
    int gy = get_global_id(1); // site
    if (gy > sites) return;
-   nodeID = leafInfo[nodeID*4];
-   parentNodeIndex = leafInfo[nodeID*4+1];
-   childNodeIndex = leafInfo[nodeID*4+2];
-   intTagState = leafInfo[nodeID*4+3];
-   long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gy*roundCharacters + gx;
-   float privateParentScratch = 1.0f;
-   int scale = 0;
-   if (intTagState == 1)
+   for (int i = 0; i < leafNumber; i++)
    {
-       privateParentScratch = node_cache[parentCharacterIndex];
-       scale = scalings[parentCharacterIndex];
-   }
-   long siteState = nodFlag_cache[childNodeIndex*sites + gy];
-   privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + siteState*roundCharacters + gx];
-   if (gy < sites && gx < characters)
-   {
-       node_cache[parentCharacterIndex] = privateParentScratch;
-       scalings[parentCharacterIndex] = scale;
+       nodeID = leafInfo[i*4];
+       parentNodeIndex = leafInfo[i*4+1];
+       childNodeIndex = leafInfo[i*4+2];
+       intTagState = leafInfo[i*4+3];
+       long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gy*roundCharacters + gx;
+       float privateParentScratch = 1.0f;
+       int scale = 0;
+       if (intTagState == 1)
+       {
+           privateParentScratch = node_cache[parentCharacterIndex];
+           scale = scalings[parentCharacterIndex];
+       }
+       long siteState = nodFlag_cache[childNodeIndex*sites + gy];
+       privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + siteState*roundCharacters + gx];
+       if (gy < sites && gx < characters)
+       {
+           node_cache[parentCharacterIndex] = privateParentScratch;
+           scalings[parentCharacterIndex] = scale;
+       }
    }
 }
 __kernel void AmbigKernel(     __global float* node_cache,                 // argument 0

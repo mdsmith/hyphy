@@ -543,6 +543,7 @@ int _OCLEvaluator::setupContext(void)
     ciErr1 |= clSetKernelArg(ckLeafKernel, 12, sizeof(cl_float), (void*)&tempScalar);
     ciErr1 |= clSetKernelArg(ckLeafKernel, 13, sizeof(cl_float), (void*)&tempuFlowThresh);
     ciErr1 |= clSetKernelArg(ckLeafKernel, 14, sizeof(cl_mem), (void*)&cmLeafInfo_cache);
+    ciErr1 |= clSetKernelArg(ckLeafKernel, 15, sizeof(cl_int), (void*)&tempNodeID); // the number of leaves being updated
 
     ciErr1 |= clSetKernelArg(ckAmbigKernel, 0, sizeof(cl_mem), (void*)&cmNode_cache);
     ciErr1 |= clSetKernelArg(ckAmbigKernel, 1, sizeof(cl_mem), (void*)&cmModel_cache);
@@ -713,7 +714,41 @@ double _OCLEvaluator::oclmain(void)
 #endif
     //printf("Finished writing the model stuff\n");
     // Launch kernel
+
+    int updateNodeIndex = 0;
+
     for (int nodeIndex = 0; nodeIndex < updateNodes.lLength; nodeIndex++)
+    {
+        long    nodeCode = updateNodes.lData[nodeIndex],
+                parentCode = flatParents.lData[nodeCode];
+
+        bool isLeaf = nodeCode < flatLeaves.lLength;
+        if (!isLeaf) break;
+        updateNodeIndex++;
+
+        long nodeCodeTemp = nodeCode;
+        int tempIntTagState = taggedInternals.lData[parentCode];
+        ((int*)leafInfo)[nodeIndex*4] = nodeIndex;
+        ((int*)leafInfo)[nodeIndex*4+1] = parentCode;
+        ((int*)leafInfo)[nodeIndex*4+2] = nodeCode;
+        ((int*)leafInfo)[nodeIndex*4+3] = tempIntTagState;
+        taggedInternals.lData[parentCode] = 1;
+    }
+
+    ciErr1 |= clSetKernelArg(ckLeafKernel, 15, sizeof(cl_int), (void*)&updateNodeIndex);
+    ciErr1 |= clEnqueueWriteBuffer(cqCommandQueue, cmLeafInfo_cache, CL_FALSE, 0,
+                sizeof(cl_int)*4*nodesInTree,
+                leafInfo, 0, NULL, &tempEvent);
+    clReleaseEvent(tempEvent);
+
+#ifdef __VERBOSE__
+    printf("Leaf/Ambig Started (ParentCode: %i)...", parentCode);
+#endif
+    ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue, ckLeafKernel, 2, NULL,
+                            szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
+    ciErr1 |= clFlush(cqCommandQueue);
+
+    for (int nodeIndex = updateNodeIndex; nodeIndex < updateNodes.lLength; nodeIndex++)
     {
         //printf("NewNode\n");
         long    nodeCode = updateNodes.lData[nodeIndex],
@@ -727,6 +762,7 @@ double _OCLEvaluator::oclmain(void)
 
             long nodeCodeTemp = nodeCode;
             int tempIntTagState = taggedInternals.lData[parentCode];
+            /*
             int ambig = 0;
             for (int aI = 0; aI < siteCount; aI++)
                 if (lNodeFlags[nodeCode*siteCount + aI] < 0)
@@ -734,6 +770,7 @@ double _OCLEvaluator::oclmain(void)
                         ambig = 1;
                         break;
                     }
+                    */
             ((int*)leafInfo)[nodeIndex*4] = nodeIndex;
             ((int*)leafInfo)[nodeIndex*4+1] = parentCode;
             ((int*)leafInfo)[nodeIndex*4+2] = nodeCode;
@@ -742,6 +779,7 @@ double _OCLEvaluator::oclmain(void)
                         sizeof(cl_int)*4*nodesInTree,
                         leafInfo, 0, NULL, &tempEvent);
             clReleaseEvent(tempEvent);
+            /*
             if (!ambig)
             {
                 ciErr1 |= clSetKernelArg(ckLeafKernel, 6, sizeof(cl_long), (void*)&nodeCodeTemp);
@@ -774,6 +812,7 @@ double _OCLEvaluator::oclmain(void)
                 clReleaseEvent(tempEvent);
             }
             ciErr1 |= clFlush(cqCommandQueue);
+            */
 #ifdef __VERBOSE__
             printf("Finished\n");
 #endif
