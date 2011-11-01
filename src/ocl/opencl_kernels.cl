@@ -21,10 +21,10 @@ __kernel void LeafKernel(  __global float* node_cache,                 // argume
    if (gx > characters) return;
    int gy = get_global_id(1); // site
    if (gy > sites) return;
-   //nodeID = leafInfo[nodeID*4];
-   //parentNodeIndex = leafInfo[nodeID*4+1];
-   //childNodeIndex = leafInfo[nodeID*4+2];
-   //intTagState = leafInfo[nodeID*4+3];
+   nodeID = leafInfo[nodeID*4];
+   parentNodeIndex = leafInfo[nodeID*4+1];
+   childNodeIndex = leafInfo[nodeID*4+2];
+   intTagState = leafInfo[nodeID*4+3];
    long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gy*roundCharacters + gx;
    float privateParentScratch = 1.0f;
    int scale = 0;

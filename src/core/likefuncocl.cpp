@@ -89,6 +89,7 @@ double queueSecs;
 double setupSecs;
 
 bool clean;
+int nodesInTree;
 
 cl_context cxGPUContext;        // OpenCL context
 cl_command_queue cqCommandQueue;// OpenCL command que
@@ -183,6 +184,7 @@ int _OCLEvaluator::setupContext(void)
     long nodeResCount = lNodeResolutions->GetUsed();
     int roundCharacters = roundUpToNextPowerOfTwo(alphabetDimension);
     //printf("Got the sizes of nodeRes and nodeFlag: %i, %i\n", nodeResCount, nodeFlagCount);
+    nodesInTree = updateNodes.lLength;
 
     bool ambiguousNodes = true;
     if (nodeResCount == 0)
@@ -202,7 +204,7 @@ int _OCLEvaluator::setupContext(void)
     root_scalings   = (void*)malloc(sizeof(cl_int)*siteCount*roundCharacters);
     result_cache    = (void*)malloc(sizeof(clfp)*roundUpToNextPowerOfTwo(siteCount));
     model           = (void*)malloc(sizeof(cl_float)*roundCharacters*roundCharacters*(flatParents.lLength-1));
-    leafInfo        = (void*)malloc(sizeof(cl_int)*4*updateNodes.lLength);
+    leafInfo        = (void*)malloc(sizeof(cl_int)*4*nodesInTree);
 
     //printf("Allocated all of the arrays!\n");
     //printf("setup the model, fixed tagged internals!\n");
@@ -365,7 +367,7 @@ int _OCLEvaluator::setupContext(void)
                     sizeof(clfp)*roundUpToNextPowerOfTwo(siteCount), NULL, &ciErr2);
     ciErr1 |= ciErr2;
     cmLeafInfo_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR,
-                    sizeof(cl_int)*4*updateNodes.lLength, leafInfo, &ciErr2);
+                    sizeof(cl_int)*4*nodesInTree, leafInfo, &ciErr2);
     ciErr1 |= ciErr2;
 //    printf("clCreateBuffer...\n");
     if (ciErr1 != CL_SUCCESS)
@@ -736,6 +738,10 @@ double _OCLEvaluator::oclmain(void)
             ((int*)leafInfo)[nodeIndex*4+1] = parentCode;
             ((int*)leafInfo)[nodeIndex*4+2] = nodeCode;
             ((int*)leafInfo)[nodeIndex*4+3] = tempIntTagState;
+            ciErr1 |= clEnqueueWriteBuffer(cqCommandQueue, cmLeafInfo_cache, CL_FALSE, 0,
+                        sizeof(cl_int)*4*nodesInTree,
+                        leafInfo, 0, NULL, &tempEvent);
+            clReleaseEvent(tempEvent);
             if (!ambig)
             {
                 ciErr1 |= clSetKernelArg(ckLeafKernel, 6, sizeof(cl_long), (void*)&nodeCodeTemp);
