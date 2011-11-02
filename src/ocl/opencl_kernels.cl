@@ -28,7 +28,8 @@ __kernel void LeafKernel(  __global float* node_cache,                 // argume
        scale = scalings[parentCharacterIndex];
    }
    long siteState = nodFlag_cache[childNodeIndex*sites + gy];
-   privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + siteState*roundCharacters + gx];
+   //privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + siteState*roundCharacters + gx];
+   privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + gx*roundCharacters + siteState];
    if (gy < sites && gx < characters)
    {
        node_cache[parentCharacterIndex] = privateParentScratch;
@@ -160,7 +161,8 @@ __kernel void InternalKernel(  __global float* node_cache,                 // ar
    {
        childScratch[ty][tx] =
            node_cache[childNodeIndex*sites*roundCharacters + roundCharacters*gy + (charBlock*BLOCK_SIZE) + tx];
-       modelScratch[ty][tx] = model[nodeID*roundCharacters*roundCharacters + roundCharacters*((charBlock*BLOCK_SIZE)+ty) + gx];
+       //modelScratch[ty][tx] = model[nodeID*roundCharacters*roundCharacters + roundCharacters*((charBlock*BLOCK_SIZE)+ty) + gx];
+       modelScratch[ty][tx] = model[nodeID*roundCharacters*roundCharacters + roundCharacters*gx + ((charBlock*BLOCK_SIZE)+ty)];
        barrier(CLK_LOCAL_MEM_FENCE);
        for (int myChar = 0; myChar < MIN(BLOCK_SIZE, (characters-cChar)); myChar++)
        {

@@ -640,7 +640,7 @@ double _OCLEvaluator::oclmain(void)
         {
             for (a2 = 0; a2 < alphabetDimension; a2++)
             {
-                ((float*)model)[nodeID*roundCharacters*roundCharacters+a2*roundCharacters+a1] =
+                ((float*)model)[nodeID*roundCharacters*roundCharacters+a1*roundCharacters+a2] =
                    (float)(tMatrix[a1*alphabetDimension+a2]);
             }
         }
