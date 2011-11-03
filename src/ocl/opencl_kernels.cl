@@ -18,16 +18,32 @@ __kernel void LeafKernel(  __global float* node_cache,                 // argume
                            )
 {
    // leafinfo: NodeID, Parent, child, tagstate
+   __local int sharedLeafInfo[32];
+   int leafInfoIndex = get_local_id(0);
+   while (leafInfoIndex < 4*leafNumber)
+   {
+       sharedLeafInfo[leafInfoIndex] = leafInfo[leafInfoIndex];
+       leafInfoIndex += get_local_size(0);
+   }
+
+   barrier(CLK_LOCAL_MEM_FENCE);
+
    int gx = get_global_id(0); // pchar
    if (gx > characters) return;
    int gy = get_global_id(1); // site
    if (gy > sites) return;
    for (int i = 0; i < leafNumber; i++)
    {
+/*
        nodeID = leafInfo[i*4];
        parentNodeIndex = leafInfo[i*4+1];
        childNodeIndex = leafInfo[i*4+2];
        intTagState = leafInfo[i*4+3];
+*/
+       nodeID = sharedLeafInfo[i*4];
+       parentNodeIndex = sharedLeafInfo[i*4+1];
+       childNodeIndex = sharedLeafInfo[i*4+2];
+       intTagState = sharedLeafInfo[i*4+3];
        long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gy*roundCharacters + gx;
        float privateParentScratch = 1.0f;
        int scale = 0;
