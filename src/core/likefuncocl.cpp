@@ -44,7 +44,7 @@ typedef cl_double clfp;
 #define PRAGMADEF "#pragma OPENCL EXTENSION cl_khr_fp64: enable \n"
 #pragma OPENCL EXTENSION cl_khr_fp64: enable
 #elif defined(__AMDOCL__) 
-#define __GPUResults__
+//#define __GPUResults__
 #define __OCLPOSIX__
 #include <CL/opencl.h>
 typedef double fpoint;
@@ -160,7 +160,6 @@ void _OCLEvaluator::init(   long esiteCount,
 // *********************************************************************
 int _OCLEvaluator::setupContext(void)
 {
-    cl_event tempEvent;
 #ifdef __OCLPOSIX__
     clock_gettime(CLOCK_MONOTONIC, &setupStart);
 #endif
@@ -186,7 +185,9 @@ int _OCLEvaluator::setupContext(void)
     freq_cache      = (void*)malloc(sizeof(cl_int)*siteCount);
     root_cache      = (void*)malloc(sizeof(cl_float)*siteCount*roundCharacters);
     root_scalings   = (void*)malloc(sizeof(cl_int)*siteCount*roundCharacters);
+#ifndef __pinned_reads__
     result_cache    = (void*)malloc(sizeof(clfp)*roundUpToNextPowerOfTwo(siteCount));
+#endif
     model           = (void*)malloc(sizeof(cl_float)*roundCharacters*roundCharacters*(flatParents.lLength-1));
 
     //printf("Allocated all of the arrays!\n");
@@ -344,8 +345,17 @@ int _OCLEvaluator::setupContext(void)
     cmFreq_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_ONLY,
                     sizeof(cl_float)*siteCount, NULL, &ciErr2);
     ciErr1 |= ciErr2;
+
+#ifdef __pinned_reads__
+    cmResult_cache = clCreateBuffer(cxGPUContext, CL_MEM_WRITE_ONLY | CL_MEM_ALLOC_HOST_PTR,
+                    sizeof(clfp)*roundUpToNextPowerOfTwo(siteCount), NULL, &ciErr2);
+    result_cache = (fpoint*)clEnqueueMapBuffer(cqCommandQueue, cmResult_cache, CL_TRUE, 
+                    CL_MAP_READ, 0, sizeof(clfp)*roundUpToNextPowerOfTwo(siteCount), 0, 
+                    NULL, NULL, NULL);
+#else
     cmResult_cache = clCreateBuffer(cxGPUContext, CL_MEM_WRITE_ONLY,
                     sizeof(clfp)*roundUpToNextPowerOfTwo(siteCount), NULL, &ciErr2);
+#endif
     ciErr1 |= ciErr2;
 //    printf("clCreateBuffer...\n");
     if (ciErr1 != CL_SUCCESS)
@@ -575,8 +585,7 @@ int _OCLEvaluator::setupContext(void)
     // Start Core sequence... copy input data to GPU, compute, copy results back
     // Asynchronous write of data to GPU device
     ciErr1 |= clEnqueueWriteBuffer(cqCommandQueue, cmFreq_cache, CL_FALSE, 0,
-                sizeof(cl_int)*siteCount, freq_cache, 0, NULL, &tempEvent);
-    clReleaseEvent(tempEvent);
+                sizeof(cl_int)*siteCount, freq_cache, 0, NULL, NULL);
     //printf("clEnqueueWriteBuffer (root_cache, etc.)...");
     if (ciErr1 != CL_SUCCESS)
     {
@@ -592,7 +601,6 @@ int _OCLEvaluator::setupContext(void)
 
 double _OCLEvaluator::oclmain(void)
 {
-    cl_event tempEvent;
     //printf("newLF!\n");
     //printf("LF");
     // so far this wholebuffer rebuild takes almost no time at all. Perhaps not true re:queue
@@ -650,8 +658,7 @@ double _OCLEvaluator::oclmain(void)
     // with no queueing, however, we still only see ~700lf/s, which isn't much better than the threaded CPU code.
     ciErr1 |= clEnqueueWriteBuffer(cqCommandQueue, cmModel_cache, CL_FALSE, 0,
                 sizeof(cl_float)*roundCharacters*roundCharacters*(flatParents.lLength-1),
-                model, 0, NULL, &tempEvent);
-    clReleaseEvent(tempEvent);
+                model, 0, NULL, NULL);
 #ifdef __OCLPOSIX__
     clock_gettime(CLOCK_MONOTONIC, &bufferEnd);
     buffSecs += (bufferEnd.tv_sec - bufferStart.tv_sec)+(bufferEnd.tv_nsec - bufferStart.tv_nsec)/BILLION;
@@ -738,8 +745,7 @@ double _OCLEvaluator::oclmain(void)
                 printf("Leaf/Ambig Started ...");
 #endif
                 ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue, ckAmbigKernel, 2, NULL,
-                                                szGlobalWorkSize, szLocalWorkSize, 0, NULL, &tempEvent);
-                clReleaseEvent(tempEvent);
+                                                szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
             }
             ciErr1 |= clFlush(cqCommandQueue);
 #ifdef __VERBOSE__
@@ -761,8 +767,7 @@ double _OCLEvaluator::oclmain(void)
             printf("Internal Started (ParentCode: %i)...", parentCode);
 #endif
             ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue, ckInternalKernel, 2, NULL,
-                                            szGlobalWorkSize, szLocalWorkSize, 0, NULL, &tempEvent);
-            clReleaseEvent(tempEvent);
+                                            szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
 
             //printf("internal!\n");
             ciErr1 |= clFlush(cqCommandQueue);
@@ -800,15 +805,12 @@ double _OCLEvaluator::oclmain(void)
 	size_t szGlobalWorkSize2 = 256;
 	size_t szLocalWorkSize2 = 256;
     ciErr1 |= clEnqueueNDRangeKernel(cqCommandQueue, ckResultKernel, 1, NULL,
-        &szGlobalWorkSize2, &szLocalWorkSize2, 0, NULL, &tempEvent);
-    clReleaseEvent(tempEvent);
+        &szGlobalWorkSize2, &szLocalWorkSize2, 0, NULL, NULL);
     ciErr1 |= clEnqueueNDRangeKernel(cqCommandQueue, ckReductionKernel, 1, NULL,
-        &szGlobalWorkSize2, &szLocalWorkSize2, 0, NULL, &tempEvent);
-    clReleaseEvent(tempEvent);
+        &szGlobalWorkSize2, &szLocalWorkSize2, 0, NULL, NULL);
 #else
     ciErr1 |= clEnqueueNDRangeKernel(cqCommandQueue, ckResultKernel, 2, NULL,
-        szGlobalWorkSize, szLocalWorkSize, 0, NULL, &tempEvent);
-    clReleaseEvent(tempEvent);
+        szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
 #endif
     if (ciErr1 != CL_SUCCESS)
     {
@@ -843,8 +845,7 @@ double _OCLEvaluator::oclmain(void)
       //      NULL, NULL);
     ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALE, 0,
             sizeof(clfp), result_cache, 0,
-            NULL, &tempEvent);
-    clReleaseEvent(tempEvent);
+            NULL, NULL);
     //ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
      //       sizeof(cl_double)*1, result_cache, 0,
       //      NULL, NULL);
@@ -857,8 +858,7 @@ double _OCLEvaluator::oclmain(void)
       //      NULL, NULL);
     ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
             sizeof(clfp)*roundUpToNextPowerOfTwo(siteCount), result_cache, 0,
-            NULL, &tempEvent);
-    clReleaseEvent(tempEvent);
+            NULL, NULL);
 #endif
 /*
     ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
