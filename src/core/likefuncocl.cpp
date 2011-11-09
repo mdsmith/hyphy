@@ -33,6 +33,7 @@ typedef cl_float clfp;
 //#define PRAGMADEF "#pragma OPENCL EXTENSION cl_khr_fp64: enable \n"
 #define PRAGMADEF " \n"
 //#pragma OPENCL EXTENSION cl_khr_fp64: enable
+
 #elif defined(__NVIDIAOCL__)
 #define __GPUResults__
 #define __OCLPOSIX__
@@ -43,6 +44,7 @@ typedef cl_double clfp;
 #define FLOATPREC "typedef double fpoint; \n"
 #define PRAGMADEF "#pragma OPENCL EXTENSION cl_khr_fp64: enable \n"
 #pragma OPENCL EXTENSION cl_khr_fp64: enable
+
 #elif defined(__AMDOCL__) 
 //#define __GPUResults__
 #define __OCLPOSIX__
@@ -52,6 +54,7 @@ typedef cl_double clfp;
 #define FLOATPREC "typedef double fpoint; \n"
 #define PRAGMADEF "#pragma OPENCL EXTENSION cl_amd_fp64: enable \n"
 #pragma OPENCL EXTENSION cl_amd_fp64: enable
+
 #elif defined(FLOAT)
 #include <CL/opencl.h>
 typedef float fpoint;
@@ -856,14 +859,22 @@ double _OCLEvaluator::oclmain(void)
     //ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
      //       sizeof(cl_float)*roundUpToNextPowerOfTwo(siteCount), result_cache, 0,
       //      NULL, NULL);
+/*
+//  TODO where I want thi read to be:
     ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
             sizeof(clfp), result_cache, 0,
             NULL, NULL);
-/*
+//  TODO where it would be if everything but the last parallel reduction were working
+//  (the problem is with longcodon.bf
     ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
-            sizeof(clfp)*roundUpToNextPowerOfTwo(siteCount), result_cache, 0,
+            sizeof(clfp)*(roundUpToNextPowerOfTwo(siteCount)/2), result_cache, 0,
             NULL, NULL);
 */
+//  TODO this should be the most relaxed and therefore should work for the long
+//  codon (see the one below, but for some reason it isn't working. 
+    ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
+            sizeof(clfp)*(roundUpToNextPowerOfTwo(siteCount)), result_cache, 0,
+            NULL, NULL);
 #endif
 /*
     ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
@@ -926,14 +937,24 @@ double _OCLEvaluator::oclmain(void)
 	*/
     oResult = ((fpoint*)result_cache)[0];
 #else
-    oResult = ((fpoint*)result_cache)[0];
+//  TODO again, this is where I want to be
+//    oResult = ((fpoint*)result_cache)[0];
     //#pragma omp parallel for reduction (+:oResult) schedule(static)
 /*
-    for (int i = 0; i < siteCount; i++)
+//  TODO again, this is where it breaks for LongCodon.bf
+    for (int i = 0; i < roundUpToNextPowerOfTwo(siteCount)/2; i++)
     {
         oResult += ((fpoint*)result_cache)[i];
     }
 */
+//  TODO this is the old standby, and by all means should work for longcodon. 
+//  The only difference anymore between this version that doesn't work for 
+//  longcodon.bf and the master branch which does is what goes on in the 
+//  results kernel. So that is where we need to look. 
+    for (int i = 0; i < siteCount; i++)
+    {
+        oResult += ((fpoint*)result_cache)[i];
+    }
 #ifdef __VERBOSE__
     printf("Result_Cache: \n");
     for (int i = 0; i < siteCount; i++)

@@ -258,42 +258,61 @@ __kernel void ResultKernel (   __global int* freq_cache,                   // ar
         barrier(CLK_LOCAL_MEM_FENCE);
     }
 
-    int powerOfTwoBelow = native_exp2(floor(native_log(get_global_size(1))));
+
+    if (character == 0)
+    {
+        fpoint acc = root_cache[site*roundCharacters];
+        result_cache[site] = (log(acc)-scale*log(scalar)) * freq_cache[site];
+    }
+/*
+    
+//  TODO the below code is correct, and returns the correct answer for smallcodon up to the last parallel 
+//  reduction. It never returns the correct answer for longcodon, however. Therefore the above snippet
+//  was introduced.  
+    int powerOfTwoBelow = native_exp2(floor(native_log2(get_global_size(1))));
 
     if (site < powerOfTwoBelow && character == 0)
     {
         // to cover the whole result_cache each site < powerOfTwo below will need to address two elements
-        // the first is guarenteed to be < sites, the second, which is powerOfTwoBelow more than the firs,
+        // the first is guarenteed to be < sites, the second, which is powerOfTwoBelow more than the first,
         // is not and needs to be checked.
-        // TODO you can at the same time perform a single iteration of a serial reduction to get all the 
+        // you can at the same time perform a single iteration of a serial reduction to get all the 
         // values below the power of two threshold, so in the next step you can perform the parallel reduction
+        result_cache[site] = 0.0;
+        result_cache[site+powerOfTwoBelow] = 0.0;
+        barrier(CLK_LOCAL_MEM_FENCE);
         fpoint acc = root_cache[site*roundCharacters];
         result_cache[site] = (log(acc)-scale*log(scalar)) * freq_cache[site];
         if (site+powerOfTwoBelow < sites)
         {
             acc = root_cache[(site+powerOfTwoBelow)*roundCharacters];
-            result_cache[site+powerOfTwoBelow] = (log(acc)-scale*log(scalar)) * freq_cache[site+powerOfTwoBelow];
+            scale = root_scalings[(site+powerOfTwoBelow)*roundCharacters];
+            result_cache[site] += (log(acc)-scale*log(scalar)) * freq_cache[site+powerOfTwoBelow];
         }
-        else result_cache[site+powerOfTwoBelow] = 0.0f;
 
-        // TODO make this reduction not over get_global_size(1), but rather powerOfTwoBelow
-        for (int offset = get_global_size(1)/2; offset > 0; offset >>=1)
+        if (site < (powerOfTwoBelow/2))
         {
-            if (site < offset && character == 0)
+                fpoint other = result_cache[site+(powerOfTwoBelow/2)];
+                fpoint mine = result_cache[site];
+                result_cache[site] = mine + other;
+        }
+
+        for (int offset = powerOfTwoBelow/2; offset > 0; offset >>=1)
+        {
+            if (site < offset)
             { 
                 fpoint other = result_cache[(site+offset)];
+                result_cache[site+offset] = 0.0f;
                 fpoint mine = result_cache[site];
                 result_cache[site] = mine + other;
             }
             barrier(CLK_LOCAL_MEM_FENCE);
         }
-
     }
-
-
-
-/*
 */
+
+
+
 
    /*
    if (get_global_id(0) != 0) return; // use only the first character in a site (return all other work items in the first group
