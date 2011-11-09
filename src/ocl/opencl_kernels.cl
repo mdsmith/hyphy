@@ -141,8 +141,8 @@ __kernel void InternalKernel(  __global float* node_cache,                 // ar
    short tx = get_local_id(0);   //local pchar
    short ty = get_local_id(1);   //local site
    // global index
-   short gx = get_global_id(0);
-   int gy = get_global_id(1);
+   short gx = get_global_id(0);     //global pchar
+   int gy = get_global_id(1);       //global site
    long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gy*roundCharacters + gx;
    float privateParentScratch = 1.0f;
    short scale = 0;
@@ -233,10 +233,75 @@ __kernel void ResultKernel (   __global int* freq_cache,                   // ar
    // TODO: this would probably be faster if I saved them further apart to reduce bank conflicts
    if (localSite == 0) result_cache[get_group_id(0)] = resultScratch[0];
    #else
-   if (get_global_id(0) != 0) return;
+    int character = get_global_id(0);
+    int site = get_global_id(1);
+    int scale = root_scalings[site*roundCharacters];
+    
+    // multiply by probs
+    if (character < characters)
+    {
+        fpoint mine = root_cache[site*roundCharacters+character]*prob_cache[character];
+        root_cache[site*roundCharacters+character] = mine;
+    }
+    else root_cache[site*roundCharacters+character] = 0.0f;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    
+    // reduce sites*characters to sites
+    for (int offset = get_global_size(0)/2; offset > 0; offset >>=1)
+    {
+        if (character < offset)
+        {
+            fpoint other =  root_cache[site*roundCharacters + character + offset];
+            fpoint mine =   root_cache[site*roundCharacters + character];
+            root_cache[site*roundCharacters + character] = other + mine;
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+    }
+
+    int powerOfTwoBelow = native_exp2(floor(native_log(get_global_size(1))));
+
+    if (site < powerOfTwoBelow && character == 0)
+    {
+        // to cover the whole result_cache each site < powerOfTwo below will need to address two elements
+        // the first is guarenteed to be < sites, the second, which is powerOfTwoBelow more than the firs,
+        // is not and needs to be checked.
+        // TODO you can at the same time perform a single iteration of a serial reduction to get all the 
+        // values below the power of two threshold, so in the next step you can perform the parallel reduction
+        fpoint acc = root_cache[site*roundCharacters];
+        result_cache[site] = (log(acc)-scale*log(scalar)) * freq_cache[site];
+        if (site+powerOfTwoBelow < sites)
+        {
+            acc = root_cache[(site+powerOfTwoBelow)*roundCharacters];
+            result_cache[site+powerOfTwoBelow] = (log(acc)-scale*log(scalar)) * freq_cache[site+powerOfTwoBelow];
+        }
+        else result_cache[site+powerOfTwoBelow] = 0.0f;
+
+        // TODO make this reduction not over get_global_size(1), but rather powerOfTwoBelow
+        for (int offset = get_global_size(1)/2; offset > 0; offset >>=1)
+        {
+            if (site < offset && character == 0)
+            { 
+                fpoint other = result_cache[(site+offset)];
+                fpoint mine = result_cache[site];
+                result_cache[site] = mine + other;
+            }
+            barrier(CLK_LOCAL_MEM_FENCE);
+        }
+
+    }
+
+
+
+/*
+*/
+
+   /*
+   if (get_global_id(0) != 0) return; // use only the first character in a site (return all other work items in the first group
+                                      // and all work items in all work groups farther on the characters axis.
    int site = get_global_id(1);
    result_cache[site] = 0.0;
-   if (get_group_id(1) >= get_local_size(0)*get_local_size(1)) return;
+   if (get_group_id(1) >= get_local_size(0)*get_local_size(1)) return; // use only the first 256 work groups along the sites axis
+                                                                       // this would result in 256*16 work items doing the whole reduction.
    while (site < sites)
    {
        float acc = 0.0;
@@ -248,10 +313,9 @@ __kernel void ResultKernel (   __global int* freq_cache,                   // ar
        result_cache[site] += (native_log(acc)-scale*native_log(scalar)) * freq_cache[site];
        site += get_local_size(0)*get_local_size(1);
    }
-   barrier(CLK_LOCAL_MEM_FENCE);
-   #endif
-   /*
    */
+   //barrier(CLK_LOCAL_MEM_FENCE);
+   #endif
 }
 __kernel void ReductionKernel ( __global double* result_cache               // argument 1
                            )

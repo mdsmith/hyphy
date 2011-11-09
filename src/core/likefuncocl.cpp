@@ -843,7 +843,7 @@ double _OCLEvaluator::oclmain(void)
     //ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
      //       sizeof(cl_double)*roundUpToNextPowerOfTwo(siteCount), result_cache, 0,
       //      NULL, NULL);
-    ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALE, 0,
+    ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
             sizeof(clfp), result_cache, 0,
             NULL, NULL);
     //ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
@@ -857,8 +857,13 @@ double _OCLEvaluator::oclmain(void)
      //       sizeof(cl_float)*roundUpToNextPowerOfTwo(siteCount), result_cache, 0,
       //      NULL, NULL);
     ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
+            sizeof(clfp), result_cache, 0,
+            NULL, NULL);
+/*
+    ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
             sizeof(clfp)*roundUpToNextPowerOfTwo(siteCount), result_cache, 0,
             NULL, NULL);
+*/
 #endif
 /*
     ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
@@ -921,11 +926,14 @@ double _OCLEvaluator::oclmain(void)
 	*/
     oResult = ((fpoint*)result_cache)[0];
 #else
+    oResult = ((fpoint*)result_cache)[0];
     //#pragma omp parallel for reduction (+:oResult) schedule(static)
+/*
     for (int i = 0; i < siteCount; i++)
     {
         oResult += ((fpoint*)result_cache)[i];
     }
+*/
 #ifdef __VERBOSE__
     printf("Result_Cache: \n");
     for (int i = 0; i < siteCount; i++)
