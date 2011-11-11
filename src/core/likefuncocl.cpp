@@ -869,11 +869,14 @@ double _OCLEvaluator::oclmain(void)
     ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
             sizeof(clfp)*(roundUpToNextPowerOfTwo(siteCount)/2), result_cache, 0,
             NULL, NULL);
-*/
 //  TODO this should be the most relaxed and therefore should work for the long
 //  codon (see the one below, but for some reason it isn't working. 
     ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
             sizeof(clfp)*(roundUpToNextPowerOfTwo(siteCount)), result_cache, 0,
+            NULL, NULL);
+*/
+    ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
+            sizeof(clfp)*siteCount, result_cache, 0,
             NULL, NULL);
 #endif
 /*

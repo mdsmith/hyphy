@@ -233,6 +233,7 @@ __kernel void ResultKernel (   __global int* freq_cache,                   // ar
    // TODO: this would probably be faster if I saved them further apart to reduce bank conflicts
    if (localSite == 0) result_cache[get_group_id(0)] = resultScratch[0];
    #else
+/*
     int character = get_global_id(0);
     int site = get_global_id(1);
     int scale = root_scalings[site*roundCharacters];
@@ -240,6 +241,9 @@ __kernel void ResultKernel (   __global int* freq_cache,                   // ar
     // multiply by probs
     if (character < characters)
     {
+        //  TODO so I think this is where the problem is. I'm multiplying by prob_cache and saving back to 
+        //  root_cache without scaling, when root_cache is a float and result_cache (which is used in the other
+        //  version) is a fpoint.
         fpoint mine = root_cache[site*roundCharacters+character]*prob_cache[character];
         root_cache[site*roundCharacters+character] = mine;
     }
@@ -264,7 +268,6 @@ __kernel void ResultKernel (   __global int* freq_cache,                   // ar
         fpoint acc = root_cache[site*roundCharacters];
         result_cache[site] = (log(acc)-scale*log(scalar)) * freq_cache[site];
     }
-/*
     
 //  TODO the below code is correct, and returns the correct answer for smallcodon up to the last parallel 
 //  reduction. It never returns the correct answer for longcodon, however. Therefore the above snippet
@@ -310,6 +313,45 @@ __kernel void ResultKernel (   __global int* freq_cache,                   // ar
         }
     }
 */
+
+
+
+   //if (get_global_id(0) != 0) return; // use only the first character in a site (return all other work items in the first group
+                                      // and all work items in all work groups farther on the characters axis.
+    if (get_global_id(0) == 0)
+    {
+       int site = get_global_id(1);
+       result_cache[site] = 0.0;
+      // if (get_group_id(1) >= get_local_size(0)*get_local_size(1)) return; // use only the first 256 work groups along the sites axis
+                                                                           // this would result in 256*16 work items doing the whole reduction.
+       float acc = 0.0;
+       int scale = root_scalings[site*roundCharacters];
+       for (int rChar = 0; rChar < characters; rChar++)
+       {
+           acc += root_cache[site*roundCharacters + rChar] * prob_cache[rChar];
+       }
+       result_cache[site] += (native_log(acc)-scale*native_log(scalar)) * freq_cache[site];
+    }
+
+/*
+
+//  WIP works for smallcodon.bf, but not for longcodon. arg. 
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    if (get_global_id(0) == 0 && get_global_id(1) == 0)
+    {
+        double acc = 0.0;
+        for (int cSite = 0; cSite < sites; cSite++)
+        {
+            acc += result_cache[cSite];
+        }
+        result_cache[0] = acc;
+    }
+*/
+    
+
+
+//  WIP try two: the following is very slow. Make it faster (see just above)
 
 
 
