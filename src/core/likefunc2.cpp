@@ -596,7 +596,22 @@ void            _LikelihoodFunction::PopulateConditionalProbabilities   (long in
                     forceRecomputation = saveFR;
                 }
 
-// MDSOCL TODO 
+// MDSOCL TODO Options:
+/*
+      1. Pass everything to ComputeBlock, then on to the OpenCL host code and parallelize there (downstream), 
+          passing everything back up to here and breaking out of this loop. 
+      2. Using a queue for these ComputeBLock chunks, my HostCode will take these and make a new commandQueue 
+          for each one, sheduling them by modulo of number of GPU's available. 
+      3. Doing a bunch of ifDeffing in here and passing to OpenCL Host Code
+          a. Make an alternative set of functions in the OpenCL Host Code
+          b. Make the OpenCL Host Code more General
+      *** Adjunct to 3b above, make the OpenCL code more general on a whole, with functions for matrix
+          multiplication etc. 
+      TODO: option 3b, with additional generalization sounds definitely like the way to go in the long run. 
+          we'll catch this situation early, ifdef away from the above, pass it off to a function in OpenCL  
+          that catches the multiple categories and creates command queues for each one. 
+*/
+
                 if (runMode == _hyphyLFConditionProbsRawMatrixMode)
                     for (long p = 0; p < blockLength; p++) {
                         scalers.lData[p+indexShifter] = siteCorrectors[p];
