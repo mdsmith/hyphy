@@ -838,6 +838,7 @@ double _OCLEvaluator::oclmain(void)
         printf("Error in clEnqueueNDRangeKernel, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
         Cleanup(EXIT_FAILURE);
     }
+    clFinish(cqCommandQueue);
     // Synchronous/blocking read of results, and check accumulated errors
 #ifdef __GPUResults_
     //ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
@@ -859,7 +860,7 @@ double _OCLEvaluator::oclmain(void)
     //ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
     //        sizeof(clfp)*roundUpToNextPowerOfTwo(siteCount), result_cache, 0,
      //       NULL, NULL);
-    ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
+    ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_TRUE, 0,
             sizeof(clfp)*siteCount, result_cache, 0,
             NULL, NULL);
 #endif
