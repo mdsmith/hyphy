@@ -236,9 +236,9 @@ __kernel void ResultKernel (   __global int* freq_cache,                   // ar
    if (get_global_id(0) != 0) return;
    int site = get_global_id(1);
    result_cache[site] = 0.0;
-   if (get_group_id(1) >= get_local_size(0)*get_local_size(1)) return;
-   while (site < sites)
-   {
+   //if (get_group_id(1) >= get_local_size(0)*get_local_size(1)) return;
+   //while (site < sites)
+   //{
        float acc = 0.0;
        int scale = root_scalings[site*roundCharacters];
        for (int rChar = 0; rChar < characters; rChar++)
@@ -246,9 +246,9 @@ __kernel void ResultKernel (   __global int* freq_cache,                   // ar
            acc += root_cache[site*roundCharacters + rChar] * prob_cache[rChar];
        }
        result_cache[site] += (native_log(acc)-scale*native_log(scalar)) * freq_cache[site];
-       site += get_local_size(0)*get_local_size(1);
-   }
-   barrier(CLK_LOCAL_MEM_FENCE);
+       //site += get_local_size(0)*get_local_size(1);
+   //}
+   //barrier(CLK_LOCAL_MEM_FENCE);
    #endif
    /*
    */

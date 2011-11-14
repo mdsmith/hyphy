@@ -856,8 +856,11 @@ double _OCLEvaluator::oclmain(void)
     //ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
      //       sizeof(cl_float)*roundUpToNextPowerOfTwo(siteCount), result_cache, 0,
       //      NULL, NULL);
+    //ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
+    //        sizeof(clfp)*roundUpToNextPowerOfTwo(siteCount), result_cache, 0,
+     //       NULL, NULL);
     ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
-            sizeof(clfp)*roundUpToNextPowerOfTwo(siteCount), result_cache, 0,
+            sizeof(clfp)*siteCount, result_cache, 0,
             NULL, NULL);
 #endif
 /*
