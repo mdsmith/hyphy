@@ -62,8 +62,10 @@ private:
 	// alright, I can probably keep all of this in likefunc. That is because the LFEvaluation is done in the
 	// calc node
 	double oclmain(void);
+	double oclmainVectorized(void);
 	bool contextSet;
 	int setupContext(void);
+	int setupContextVectorized(void);
 
 
 public:

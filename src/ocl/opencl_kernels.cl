@@ -1,6 +1,6 @@
  #define MIN(a,b) ((a)>(b)?(b):(a))
-__kernel void LeafKernel(  __global float* node_cache,                 // argument 0
-                           __global const float* model,                // argument 1
+__kernel void LeafKernel(  __global float *node_cache,                 // argument 0
+                           __global const float *model,                // argument 1
                            __global const float* nodRes_cache,         // argument 2
                            __global const long* nodFlag_cache,         // argument 3
                            long sites,                                 // argument 4
@@ -15,26 +15,60 @@ __kernel void LeafKernel(  __global float* node_cache,                 // argume
                            float uFlowThresh                           // argument 13
                            )
 {
-   int gx = get_global_id(0); // pchar
-   if (gx > characters) return;
-   int gy = get_global_id(1); // site
-   if (gy > sites) return;
-   long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gy*roundCharacters + gx;
-   float privateParentScratch = 1.0f;
-   int scale = 0;
-   if (intTagState == 1)
-   {
-       privateParentScratch = node_cache[parentCharacterIndex];
-       scale = scalings[parentCharacterIndex];
-   }
-   long siteState = nodFlag_cache[childNodeIndex*sites + gy];
-   //privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + siteState*roundCharacters + gx];
-   privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + gx*roundCharacters + siteState];
-   if (gy < sites && gx < characters)
-   {
-       node_cache[parentCharacterIndex] = privateParentScratch;
-       scalings[parentCharacterIndex] = scale;
-   }
+    int gx = get_global_id(0); // pchar
+    if (gx > characters) return;
+    int gy = get_global_id(1); // site
+    if (gy > sites) return;
+
+    for (int i = 0; i < 1; i++)
+    {
+        float childValue = 0;
+        float modelValue = 0;
+        float parentValue = 0;
+        long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gy*roundCharacters + gx*4 + i;
+        int scale = 0;
+
+        if (intTagState == 1)
+        {
+            parentValue = node_cache[parentCharacterIndex];
+            scale = scalings[parentCharacterIndex];
+        }
+        long siteState = nodFlag_cache[childNodeIndex*sites + gy];
+        modelValue = model[nodeID*roundCharacters*roundCharacters + siteState*roundCharacters + gx*4 + i];
+        childValue = parentValue * modelValue;
+        if (gy < sites && gx*4+i < characters)
+        {
+            node_cache[parentCharacterIndex] = childValue;
+            scalings[parentCharacterIndex] = scale;
+        }
+    }
+
+/*
+    float4 childValues = (float4)(0);
+    float4 modelValues = (float4)(0);
+    float4 parentValues = (float4)(0);
+    parentValues.x = 1;
+    parentValues.y = 1;
+    parentValues.z = 1;
+    parentValues.w = 1;
+    long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gy*roundCharacters + gx*4;
+    int scale = 0;
+    if (intTagState == 1)
+    {
+        parentValues = node_cache[parentCharacterIndex];
+// TODO if it breaks, vectorize the scalings as well
+        scale = scalings[parentCharacterIndex];
+    }
+    long siteState = nodFlag_cache[childNodeIndex*sites + gy];
+    modelValues = model[nodeID*roundCharacters*roundCharacters + siteState*roundCharacters + gx*4];
+
+    childValues = modelValues * parentValues;
+    if (gy < sites && gx < characters)
+    {
+        node_cache[parentCharacterIndex] = childValues;
+        scalings[parentCharacterIndex] = scale;
+    }
+*/
 }
 __kernel void AmbigKernel(     __global float* node_cache,                 // argument 0
                                __global const float* model,                // argument 1
