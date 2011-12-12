@@ -28,8 +28,8 @@ __kernel void LeafKernel(  __global float* node_cache,                 // argume
        scale = scalings[parentCharacterIndex];
    }
    long siteState = nodFlag_cache[childNodeIndex*sites + gy];
-   //privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + siteState*roundCharacters + gx];
-   privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + gx*roundCharacters + siteState];
+   privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + siteState*roundCharacters + gx];
+   //privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + gx*roundCharacters + siteState];
    if (gy < sites && gx < characters)
    {
        node_cache[parentCharacterIndex] = privateParentScratch;
