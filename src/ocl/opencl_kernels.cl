@@ -19,7 +19,7 @@ __kernel void LeafKernel(  __global float *node_cache,                 // argume
     if (gx > characters) return;
     int gy = get_global_id(1); // site
     if (gy > sites) return;
-    float4 parentValues = (float4)(1.,1.,1.,1.);
+    float4 parentValues = (float4)(1.);
     float4 modelValues = (float4)(0);
 
     long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gy*roundCharacters + gx*4;
@@ -30,53 +30,16 @@ __kernel void LeafKernel(  __global float *node_cache,                 // argume
         scale = scalings[parentCharacterIndex];
     }
     long siteState = nodFlag_cache[childNodeIndex*sites + gy];
-    modelValues = vload4((nodeID*roundCharacters*roundCharacters + siteState*roundCharacters + gx*4)/4, model);
+    modelValues.x = model[nodeID*roundCharacters*roundCharacters + gx*4*roundCharacters + siteState];
+    modelValues.y = model[nodeID*roundCharacters*roundCharacters + (gx*4+1)*roundCharacters + siteState];
+    modelValues.z = model[nodeID*roundCharacters*roundCharacters + (gx*4+2)*roundCharacters + siteState];
+    modelValues.w = model[nodeID*roundCharacters*roundCharacters + (gx*4+3)*roundCharacters + siteState];
     parentValues *= modelValues;
     if (gy < sites && gx < characters)
     {
         vstore4(parentValues, parentCharacterIndex/4, node_cache);
         scalings[parentCharacterIndex] = scale;
     }
-/*
-    for (int i = 0; i < 4; i++)
-    {
-        long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gy*roundCharacters + gx*4 + i;
-        float privateParentScratch = 1.0f;
-        int scale = 0;
-        if (intTagState == 1)
-        {
-            privateParentScratch = node_cache[parentCharacterIndex];
-            scale = scalings[parentCharacterIndex];
-        }
-        long siteState = nodFlag_cache[childNodeIndex*sites + gy];
-        privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + siteState*roundCharacters + gx*4 + i];
-        //privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + gx*roundCharacters + siteState];
-        if (gy < sites && gx < characters)
-        {
-            node_cache[parentCharacterIndex] = privateParentScratch;
-            scalings[parentCharacterIndex] = scale;
-        }
-    }
-
-
-
-    long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gy*roundCharacters + gx;
-    float privateParentScratch = 1.0f;
-    int scale = 0;
-    if (intTagState == 1)
-    {
-        privateParentScratch = node_cache[parentCharacterIndex];
-        scale = scalings[parentCharacterIndex];
-    }
-    long siteState = nodFlag_cache[childNodeIndex*sites + gy];
-    privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + siteState*roundCharacters + gx];
-    //privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + gx*roundCharacters + siteState];
-    if (gy < sites && gx < characters)
-    {
-        node_cache[parentCharacterIndex] = privateParentScratch;
-        scalings[parentCharacterIndex] = scale;
-    }
-*/
 }
 __kernel void AmbigKernel(     __global float* node_cache,                 // argument 0
                                __global const float* model,                // argument 1
@@ -179,56 +142,58 @@ __kernel void InternalKernel(  __global float* node_cache,                 // ar
                                __global int* root_scalings                 // argument 10
                                )
 {
-   // thread index
-   short tx = get_local_id(0);   //local pchar
-   short ty = get_local_id(1);   //local site
-   // global index
-   short gx = get_global_id(0);
-   int gy = get_global_id(1);
-   long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gy*roundCharacters + gx;
-   float privateParentScratch = 1.0f;
-   short scale = 0;
-   if (intTagState == 1 && gy < sites && gx < characters)
-   {
+    // thread index
+    short tx = get_local_id(0);   //local pchar
+    short ty = get_local_id(1);   //local site
+    // global index
+    short gx = get_global_id(0);
+    int gy = get_global_id(1);
+    long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gy*roundCharacters + gx;
+    float privateParentScratch = 1.0f;
+    short scale = 0;
+    if (intTagState == 1 && gy < sites && gx < characters)
+    {
        privateParentScratch = node_cache[parentCharacterIndex];
        scale = scalings[parentCharacterIndex];
-   }
-   float sum = 0.f;
-   float childSum = 0.f;
-   int scaleScratch = scalings[childNodeIndex*sites*roundCharacters + gy*roundCharacters + gx];
-   __local float  childScratch[BLOCK_SIZE][BLOCK_SIZE];
-   __local float  modelScratch[BLOCK_SIZE][BLOCK_SIZE];
-   short cChar = 0;
-   for (int charBlock = 0; charBlock < 64/BLOCK_SIZE; charBlock++)
-   {
-       childScratch[ty][tx] =
-           node_cache[childNodeIndex*sites*roundCharacters + roundCharacters*gy + (charBlock*BLOCK_SIZE) + tx];
-       modelScratch[ty][tx] = model[nodeID*roundCharacters*roundCharacters + roundCharacters*((charBlock*BLOCK_SIZE)+ty) + gx];
-       //modelScratch[ty][tx] = model[nodeID*roundCharacters*roundCharacters + roundCharacters*gx + ((charBlock*BLOCK_SIZE)+ty)];
-       barrier(CLK_LOCAL_MEM_FENCE);
-       for (int myChar = 0; myChar < MIN(BLOCK_SIZE, (characters-cChar)); myChar++)
-       {
-           sum += childScratch[ty][myChar] * modelScratch[myChar][tx];
-           childSum += childScratch[ty][myChar];
-       }
-       barrier(CLK_LOCAL_MEM_FENCE);
-       cChar += BLOCK_SIZE;
-   }
-   while (childSum < 1 && childSum != 0)
-   {
+    }
+    float sum = 0.f;
+    float4 vSum = (float4)(0.);
+    float childSum = 0.f;
+    float4 vChildSum = (float4)(0.);
+    int scaleScratch = scalings[childNodeIndex*sites*roundCharacters + gy*roundCharacters + gx];
+    __local float4  childScratch[BLOCK_SIZE][BLOCK_SIZE];
+    __local float4  modelScratch[BLOCK_SIZE][BLOCK_SIZE];
+
+    childScratch[ty][tx] = vload4((childNodeIndex*sites*roundCharacters + roundCharacters*gy + tx*4)/4, node_cache);
+        //node_cache[childNodeIndex*sites*roundCharacters + roundCharacters*gy + (charBlock*BLOCK_SIZE) + tx];
+    modelScratch[ty][tx] = vload4((nodeID*roundCharacters*roundCharacters + roundCharacters*ty + gx*4)/4, model); 
+        //model[nodeID*roundCharacters*roundCharacters + roundCharacters*((charBlock*BLOCK_SIZE)+ty) + gx];
+    //modelScratch[ty][tx] = model[nodeID*roundCharacters*roundCharacters + roundCharacters*gx + ((charBlock*BLOCK_SIZE)+ty)];
+    barrier(CLK_LOCAL_MEM_FENCE);
+    for (int myChar = 0; myChar < BLOCK_SIZE; myChar++)
+    {
+        vSum += childScratch[ty][myChar] * modelScratch[ty][myChar];
+        vChildSum += childScratch[ty][myChar];
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+    sum = vSum.x + vSum.y + vSum.z + vSum.w;
+    childSum = vChildSum.x + vChildSum.y + vChildSum.z + vChildSum.w;
+
+    while (childSum < 1 && childSum != 0)
+    {
        childSum *= scalar;
        sum *= scalar;
        scaleScratch++;
-   }
-   scale += scaleScratch;
-   privateParentScratch *= sum;
-   if (gy < sites && gx < characters)
-   {
+    }
+    scale += scaleScratch;
+    privateParentScratch *= sum;
+    if (gy < sites && gx < characters)
+    {
        scalings     [parentCharacterIndex]  = scale;
        root_scalings[gy*roundCharacters+gx] = scale;
        node_cache   [parentCharacterIndex]  = privateParentScratch;
        root_cache   [gy*roundCharacters+gx] = privateParentScratch;
-   }
+    }
 }
 __kernel void ResultKernel (   __global int* freq_cache,                   // argument 0
                                __global float* prob_cache,                 // argument 1

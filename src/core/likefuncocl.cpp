@@ -273,7 +273,8 @@ int _OCLEvaluator::setupContext(void)
     szLocalWorkSize[0] = 1; // All of these will have to be generalized.
     szLocalWorkSize[1] = 1;
 #endif
-    szGlobalWorkSize[0] = 64;
+    szGlobalWorkSize[0] = 16;
+    //szGlobalWorkSize[0] = 64;
     szGlobalWorkSize[1] = ((siteCount + 16)/16)*16;
     //szGlobalWorkSize[1] = roundUpToNextPowerOfTwo(siteCount);
     printf("Global Work Size \t\t= %ld, %ld\nLocal Work Size \t\t= %ld, %ld\n# of Work Groups \t\t= %ld\n\n",
@@ -648,7 +649,7 @@ double _OCLEvaluator::oclmain(void)
         {
             for (a2 = 0; a2 < alphabetDimension; a2++)
             {
-                ((float*)model)[nodeID*roundCharacters*roundCharacters+a2*roundCharacters+a1] =
+                ((float*)model)[nodeID*roundCharacters*roundCharacters+a1*roundCharacters+a2] =
                    (float)(tMatrix[a1*alphabetDimension+a2]);
             }
         }
@@ -729,7 +730,7 @@ double _OCLEvaluator::oclmain(void)
 #ifdef __VERBOSE__
                 printf("Leaf/Ambig Started (ParentCode: %i)...", parentCode);
 #endif
-                szGlobalWorkSize[0] = 16;
+                //szGlobalWorkSize[0] = 16;
                 ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue, ckLeafKernel, 2, NULL,
                                                 szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
             }
@@ -745,7 +746,7 @@ double _OCLEvaluator::oclmain(void)
 #ifdef __VERBOSE__
                 printf("Leaf/Ambig Started ...");
 #endif
-                szGlobalWorkSize[0] = 64;
+                //szGlobalWorkSize[0] = 64;
                 ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue, ckAmbigKernel, 2, NULL,
                                                 szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
             }
@@ -768,7 +769,7 @@ double _OCLEvaluator::oclmain(void)
 #ifdef __VERBOSE__
             printf("Internal Started (ParentCode: %i)...", parentCode);
 #endif
-            szGlobalWorkSize[0] = 64;
+            //szGlobalWorkSize[0] = 64;
             ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue, ckInternalKernel, 2, NULL,
                                             szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
 
