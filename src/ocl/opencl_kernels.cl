@@ -166,13 +166,13 @@ __kernel void InternalKernel(  __global float* node_cache,                 // ar
 
     childScratch[ty][tx] = vload4((childNodeIndex*sites*roundCharacters + roundCharacters*gy + tx*4)/4, node_cache);
         //node_cache[childNodeIndex*sites*roundCharacters + roundCharacters*gy + (charBlock*BLOCK_SIZE) + tx];
-    modelScratch[ty][tx] = vload4((nodeID*roundCharacters*roundCharacters + roundCharacters*ty + gx*4)/4, model); 
+    modelScratch[ty][tx] = vload4((nodeID*roundCharacters*roundCharacters + roundCharacters*gx + ty*4)/4, model); 
         //model[nodeID*roundCharacters*roundCharacters + roundCharacters*((charBlock*BLOCK_SIZE)+ty) + gx];
     //modelScratch[ty][tx] = model[nodeID*roundCharacters*roundCharacters + roundCharacters*gx + ((charBlock*BLOCK_SIZE)+ty)];
     barrier(CLK_LOCAL_MEM_FENCE);
     for (int myChar = 0; myChar < BLOCK_SIZE; myChar++)
     {
-        vSum += childScratch[ty][myChar] * modelScratch[ty][myChar];
+        vSum += childScratch[ty][myChar] * modelScratch[gx][myChar];
         vChildSum += childScratch[ty][myChar];
     }
     barrier(CLK_LOCAL_MEM_FENCE);
