@@ -729,6 +729,7 @@ double _OCLEvaluator::oclmain(void)
 #ifdef __VERBOSE__
                 printf("Leaf/Ambig Started (ParentCode: %i)...", parentCode);
 #endif
+                szGlobalWorkSize[0] = 16;
                 ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue, ckLeafKernel, 2, NULL,
                                                 szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
             }
@@ -744,6 +745,7 @@ double _OCLEvaluator::oclmain(void)
 #ifdef __VERBOSE__
                 printf("Leaf/Ambig Started ...");
 #endif
+                szGlobalWorkSize[0] = 64;
                 ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue, ckAmbigKernel, 2, NULL,
                                                 szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
             }
@@ -766,6 +768,7 @@ double _OCLEvaluator::oclmain(void)
 #ifdef __VERBOSE__
             printf("Internal Started (ParentCode: %i)...", parentCode);
 #endif
+            szGlobalWorkSize[0] = 64;
             ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue, ckInternalKernel, 2, NULL,
                                             szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
 

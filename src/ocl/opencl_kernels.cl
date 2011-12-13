@@ -15,26 +15,48 @@ __kernel void LeafKernel(  __global float* node_cache,                 // argume
                            float uFlowThresh                           // argument 13
                            )
 {
-   int gx = get_global_id(0); // pchar
-   if (gx > characters) return;
-   int gy = get_global_id(1); // site
-   if (gy > sites) return;
-   long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gy*roundCharacters + gx;
-   float privateParentScratch = 1.0f;
-   int scale = 0;
-   if (intTagState == 1)
-   {
-       privateParentScratch = node_cache[parentCharacterIndex];
-       scale = scalings[parentCharacterIndex];
-   }
-   long siteState = nodFlag_cache[childNodeIndex*sites + gy];
-   privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + siteState*roundCharacters + gx];
-   //privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + gx*roundCharacters + siteState];
-   if (gy < sites && gx < characters)
-   {
-       node_cache[parentCharacterIndex] = privateParentScratch;
-       scalings[parentCharacterIndex] = scale;
-   }
+    int gx = get_global_id(0); // pchar
+    if (gx > characters) return;
+    int gy = get_global_id(1); // site
+    if (gy > sites) return;
+
+    for (int i = 0; i < 4; i++)
+    {
+        long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gy*roundCharacters + gx*4 + i;
+        float privateParentScratch = 1.0f;
+        int scale = 0;
+        if (intTagState == 1)
+        {
+            privateParentScratch = node_cache[parentCharacterIndex];
+            scale = scalings[parentCharacterIndex];
+        }
+        long siteState = nodFlag_cache[childNodeIndex*sites + gy];
+        privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + siteState*roundCharacters + gx*4 + i];
+        //privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + gx*roundCharacters + siteState];
+        if (gy < sites && gx < characters)
+        {
+            node_cache[parentCharacterIndex] = privateParentScratch;
+            scalings[parentCharacterIndex] = scale;
+        }
+    }
+/*
+    long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gy*roundCharacters + gx;
+    float privateParentScratch = 1.0f;
+    int scale = 0;
+    if (intTagState == 1)
+    {
+        privateParentScratch = node_cache[parentCharacterIndex];
+        scale = scalings[parentCharacterIndex];
+    }
+    long siteState = nodFlag_cache[childNodeIndex*sites + gy];
+    privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + siteState*roundCharacters + gx];
+    //privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + gx*roundCharacters + siteState];
+    if (gy < sites && gx < characters)
+    {
+        node_cache[parentCharacterIndex] = privateParentScratch;
+        scalings[parentCharacterIndex] = scale;
+    }
+*/
 }
 __kernel void AmbigKernel(     __global float* node_cache,                 // argument 0
                                __global const float* model,                // argument 1
