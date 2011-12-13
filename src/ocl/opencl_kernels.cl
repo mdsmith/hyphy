@@ -1,6 +1,6 @@
  #define MIN(a,b) ((a)>(b)?(b):(a))
-__kernel void LeafKernel(  __global float* node_cache,                 // argument 0
-                           __global const float* model,                // argument 1
+__kernel void LeafKernel(  __global float *node_cache,                 // argument 0
+                           __global const float *model,                // argument 1
                            __global const float* nodRes_cache,         // argument 2
                            __global const long* nodFlag_cache,         // argument 3
                            long sites,                                 // argument 4
@@ -19,7 +19,25 @@ __kernel void LeafKernel(  __global float* node_cache,                 // argume
     if (gx > characters) return;
     int gy = get_global_id(1); // site
     if (gy > sites) return;
+    float4 parentValues = (float4)(1.,1.,1.,1.);
+    float4 modelValues = (float4)(0);
 
+    long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gy*roundCharacters + gx*4;
+    int scale = 0;
+    if (intTagState == 1)
+    {
+        parentValues = vload4((parentCharacterIndex/4), node_cache);
+        scale = scalings[parentCharacterIndex];
+    }
+    long siteState = nodFlag_cache[childNodeIndex*sites + gy];
+    modelValues = vload4((nodeID*roundCharacters*roundCharacters + siteState*roundCharacters + gx*4)/4, model);
+    parentValues *= modelValues;
+    if (gy < sites && gx < characters)
+    {
+        vstore4(parentValues, parentCharacterIndex/4, node_cache);
+        scalings[parentCharacterIndex] = scale;
+    }
+/*
     for (int i = 0; i < 4; i++)
     {
         long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gy*roundCharacters + gx*4 + i;
@@ -39,7 +57,9 @@ __kernel void LeafKernel(  __global float* node_cache,                 // argume
             scalings[parentCharacterIndex] = scale;
         }
     }
-/*
+
+
+
     long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gy*roundCharacters + gx;
     float privateParentScratch = 1.0f;
     int scale = 0;
