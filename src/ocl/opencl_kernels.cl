@@ -19,6 +19,32 @@ __kernel void LeafKernel(  __global float *node_cache,                 // argume
     if (gx > characters) return;
     int gy = get_global_id(1); // site
     if (gy > sites) return;
+
+
+    float4 parentValues = (float4)(1.);
+    float4 modelValues = (float4)(0);
+
+    long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gy*roundCharacters + gx*4;
+    int scale = 0;
+    if (intTagState == 1)
+    {
+        parentValues = vload4((parentCharacterIndex/4), node_cache);
+        scale = scalings[parentCharacterIndex];
+    }
+    long siteState = nodFlag_cache[childNodeIndex*sites + gy];
+    modelValues.x = model[nodeID*roundCharacters*roundCharacters + gx*4*roundCharacters + siteState];
+    modelValues.y = model[nodeID*roundCharacters*roundCharacters + (gx*4+1)*roundCharacters + siteState];
+    modelValues.z = model[nodeID*roundCharacters*roundCharacters + (gx*4+2)*roundCharacters + siteState];
+    modelValues.w = model[nodeID*roundCharacters*roundCharacters + (gx*4+3)*roundCharacters + siteState];
+    parentValues *= modelValues;
+    if (gy < sites && gx < characters)
+    {
+        vstore4(parentValues, parentCharacterIndex/4, node_cache);
+        scalings[parentCharacterIndex] = scale;
+    }
+
+
+/*
     float4 parentValues = (float4)(1.,1.,1.,1.);
     float4 modelValues = (float4)(0);
 
@@ -37,7 +63,9 @@ __kernel void LeafKernel(  __global float *node_cache,                 // argume
         vstore4(parentValues, parentCharacterIndex/4, node_cache);
         scalings[parentCharacterIndex] = scale;
     }
+*/
 /*
+// loop with internal node model transpose
     for (int i = 0; i < 4; i++)
     {
         long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gy*roundCharacters + gx*4 + i;
@@ -49,8 +77,8 @@ __kernel void LeafKernel(  __global float *node_cache,                 // argume
             scale = scalings[parentCharacterIndex];
         }
         long siteState = nodFlag_cache[childNodeIndex*sites + gy];
-        privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + siteState*roundCharacters + gx*4 + i];
-        //privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + gx*roundCharacters + siteState];
+        //privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + siteState*roundCharacters + gx*4 + i];
+        privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + (gx*4+i)*roundCharacters + siteState];
         if (gy < sites && gx < characters)
         {
             node_cache[parentCharacterIndex] = privateParentScratch;
@@ -58,8 +86,10 @@ __kernel void LeafKernel(  __global float *node_cache,                 // argume
         }
     }
 
+*/
 
 
+/*
     long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gy*roundCharacters + gx;
     float privateParentScratch = 1.0f;
     int scale = 0;
@@ -203,8 +233,8 @@ __kernel void InternalKernel(  __global float* node_cache,                 // ar
    {
        childScratch[ty][tx] =
            node_cache[childNodeIndex*sites*roundCharacters + roundCharacters*gy + (charBlock*BLOCK_SIZE) + tx];
-       modelScratch[ty][tx] = model[nodeID*roundCharacters*roundCharacters + roundCharacters*((charBlock*BLOCK_SIZE)+ty) + gx];
-       //modelScratch[ty][tx] = model[nodeID*roundCharacters*roundCharacters + roundCharacters*gx + ((charBlock*BLOCK_SIZE)+ty)];
+       //modelScratch[ty][tx] = model[nodeID*roundCharacters*roundCharacters + roundCharacters*((charBlock*BLOCK_SIZE)+ty) + gx];
+       modelScratch[ty][tx] = model[nodeID*roundCharacters*roundCharacters + roundCharacters*gx + ((charBlock*BLOCK_SIZE)+ty)];
        barrier(CLK_LOCAL_MEM_FENCE);
        for (int myChar = 0; myChar < MIN(BLOCK_SIZE, (characters-cChar)); myChar++)
        {
