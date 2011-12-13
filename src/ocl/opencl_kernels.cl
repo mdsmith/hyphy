@@ -161,8 +161,8 @@ __kernel void InternalKernel(  __global float* node_cache,                 // ar
    {
        childScratch[ty][tx] =
            node_cache[childNodeIndex*sites*roundCharacters + roundCharacters*gy + (charBlock*BLOCK_SIZE) + tx];
-       //modelScratch[ty][tx] = model[nodeID*roundCharacters*roundCharacters + roundCharacters*((charBlock*BLOCK_SIZE)+ty) + gx];
-       modelScratch[ty][tx] = model[nodeID*roundCharacters*roundCharacters + roundCharacters*gx + ((charBlock*BLOCK_SIZE)+ty)];
+       modelScratch[ty][tx] = model[nodeID*roundCharacters*roundCharacters + roundCharacters*((charBlock*BLOCK_SIZE)+ty) + gx];
+       //modelScratch[ty][tx] = model[nodeID*roundCharacters*roundCharacters + roundCharacters*gx + ((charBlock*BLOCK_SIZE)+ty)];
        barrier(CLK_LOCAL_MEM_FENCE);
        for (int myChar = 0; myChar < MIN(BLOCK_SIZE, (characters-cChar)); myChar++)
        {
