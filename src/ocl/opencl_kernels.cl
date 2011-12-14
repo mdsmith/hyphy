@@ -157,13 +157,25 @@ __kernel void InternalKernel(  __global float* node_cache,                 // ar
        scale = scalings[parentCharacterIndex];
     }
 	float sum = 0.f;
+	float4 vSum = (float4)(0.);
 	float childSum = 0.f;
 	int scaleScratch = scalings[childNodeIndex*sites*roundCharacters + gy*roundCharacters + gx];
-	for (int i = 0; i < 61; i++)
+    __local float4 childScratch[BLOCK_SIZE*BLOCK_SIZE];
+    __local float4 modelScratch[BLOCK_SIZE*BLOCK_SIZE];
+    childScratch[ty*BLOCK_SIZE + tx] = vload4((childNodeIndex*sites*roundCharacters + roundCharacters*gy + tx*4)/4, node_cache);
+    modelScratch[tx*BLOCK_SIZE + ty] = vload4((nodeID*roundCharacters*roundCharacters + roundCharacters*gx + ty*4)/4, model); 
+    barrier(CLK_LOCAL_MEM_FENCE);
+	for (int i = 0; i < 16; i++)
 	{
-		sum += node_cache[childNodeIndex*sites*roundCharacters + roundCharacters*gy + i] 
-				* model[nodeID*roundCharacters*roundCharacters + roundCharacters*gx + i];
+        //float4 tempChild = vload4((childNodeIndex*sites*roundCharacters + roundCharacters*gy + i*4)/4, node_cache);
+        //float4 tempModel = vload4((nodeID*roundCharacters*roundCharacters + roundCharacters*gx + i*4)/4, model);
+        float4 tempChild = childScratch[ty*BLOCK_SIZE + i];
+        float4 tempModel = modelScratch[tx*BLOCK_SIZE + i];
+		vSum += tempChild * tempModel;
+		//sum += node_cache[childNodeIndex*sites*roundCharacters + roundCharacters*gy + i] 
+				//* model[nodeID*roundCharacters*roundCharacters + roundCharacters*gx + i];
 	}
+    sum = vSum.x + vSum.y + vSum.z + vSum.w;
 	privateParentScratch *= sum;
     if (gy < sites && gx < characters)
     {

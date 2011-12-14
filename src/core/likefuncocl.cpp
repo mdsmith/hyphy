@@ -240,7 +240,7 @@ int _OCLEvaluator::setupContext(void)
     ciErr1 = clGetDeviceIDs(cpPlatform, CL_DEVICE_TYPE_CPU, 1, &cdDevice, NULL);
 #endif
  //   printf("clGetDeviceIDs...\n");
- 	cdDevice = cdDeviceList[1];
+ 	cdDevice = cdDeviceList[2];
     if (ciErr1 != CL_SUCCESS)
     {
         printf("Error in clGetDeviceIDs, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
