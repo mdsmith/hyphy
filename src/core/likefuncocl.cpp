@@ -90,6 +90,7 @@ bool clean;
 cl_context cxGPUContext;        // OpenCL context
 cl_command_queue cqCommandQueue;// OpenCL command que
 cl_platform_id cpPlatform;      // OpenCL platform
+cl_device_id cdDeviceList[4];          // OpenCL device
 cl_device_id cdDevice;          // OpenCL device
 cl_program cpMLProgram;
 //cl_program cpLeafProgram;
@@ -234,11 +235,12 @@ int _OCLEvaluator::setupContext(void)
 
     //Get the devices
 #ifdef OCLGPU
-    ciErr1 = clGetDeviceIDs(cpPlatform, CL_DEVICE_TYPE_GPU, 1, &cdDevice, NULL);
+    ciErr1 = clGetDeviceIDs(cpPlatform, CL_DEVICE_TYPE_GPU, 4, cdDeviceList, NULL);
 #else
     ciErr1 = clGetDeviceIDs(cpPlatform, CL_DEVICE_TYPE_CPU, 1, &cdDevice, NULL);
 #endif
  //   printf("clGetDeviceIDs...\n");
+ 	cdDevice = cdDeviceList[1];
     if (ciErr1 != CL_SUCCESS)
     {
         printf("Error in clGetDeviceIDs, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
@@ -293,7 +295,7 @@ int _OCLEvaluator::setupContext(void)
     ciErr1 |= clGetDeviceInfo(cdDevice, CL_DEVICE_NAME, sizeof(device_name),
                               device_name, &returned_size);
     assert(ciErr1 == CL_SUCCESS);
-//    printf("Connecting to %s %s...\n", vendor_name, device_name);
+    printf("Connecting to %s %s...\n", vendor_name, device_name);
 
     //Create the context
     cxGPUContext = clCreateContext(0, 1, &cdDevice, NULL, NULL, &ciErr1);
@@ -769,9 +771,10 @@ double _OCLEvaluator::oclmain(void)
 #ifdef __VERBOSE__
             printf("Internal Started (ParentCode: %i)...", parentCode);
 #endif
-            //szGlobalWorkSize[0] = 64;
+            szGlobalWorkSize[0] = 64;
             ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue, ckInternalKernel, 2, NULL,
                                             szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
+            szGlobalWorkSize[0] = 16;
 
             //printf("internal!\n");
             ciErr1 |= clFlush(cqCommandQueue);

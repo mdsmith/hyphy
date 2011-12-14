@@ -156,6 +156,23 @@ __kernel void InternalKernel(  __global float* node_cache,                 // ar
        privateParentScratch = node_cache[parentCharacterIndex];
        scale = scalings[parentCharacterIndex];
     }
+	float sum = 0.f;
+	float childSum = 0.f;
+	int scaleScratch = scalings[childNodeIndex*sites*roundCharacters + gy*roundCharacters + gx];
+	for (int i = 0; i < 61; i++)
+	{
+		sum += node_cache[childNodeIndex*sites*roundCharacters + roundCharacters*gy + i] 
+				* model[nodeID*roundCharacters*roundCharacters + roundCharacters*gx + i];
+	}
+	privateParentScratch *= sum;
+    if (gy < sites && gx < characters)
+    {
+       scalings     [parentCharacterIndex]  = scale;
+       root_scalings[gy*roundCharacters+gx] = scale;
+       node_cache   [parentCharacterIndex]  = privateParentScratch;
+       root_cache   [gy*roundCharacters+gx] = privateParentScratch;
+    }
+	/*
     float sum = 0.f;
     float4 vSum = (float4)(0.);
     float childSum = 0.f;
@@ -194,6 +211,7 @@ __kernel void InternalKernel(  __global float* node_cache,                 // ar
        node_cache   [parentCharacterIndex]  = privateParentScratch;
        root_cache   [gy*roundCharacters+gx] = privateParentScratch;
     }
+	*/
 }
 __kernel void ResultKernel (   __global int* freq_cache,                   // argument 0
                                __global float* prob_cache,                 // argument 1
