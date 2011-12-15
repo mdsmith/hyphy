@@ -771,10 +771,10 @@ double _OCLEvaluator::oclmain(void)
 #ifdef __VERBOSE__
             printf("Internal Started (ParentCode: %i)...", parentCode);
 #endif
-            szGlobalWorkSize[0] = 64;
+            //szGlobalWorkSize[0] = 64;
             ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue, ckInternalKernel, 2, NULL,
                                             szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
-            szGlobalWorkSize[0] = 16;
+            //szGlobalWorkSize[0] = 16;
 
             //printf("internal!\n");
             ciErr1 |= clFlush(cqCommandQueue);

@@ -125,8 +125,8 @@ __kernel void AmbigKernel(     __global float* node_cache,                 // ar
    /*
    */
 }
-__kernel void InternalKernel(  __global float* node_cache,                 // argument 0
-                               __global const float* model,                // argument 1
+__kernel void InternalKernel(  __global float4 *node_cache,                 // argument 0
+                               __global const float4 *model,                // argument 1
                                __global const float* nodRes_cache,         // argument 2
                                long sites,                                 // argument 3
                                long characters,                            // argument 4
@@ -135,7 +135,7 @@ __kernel void InternalKernel(  __global float* node_cache,                 // ar
                                long roundCharacters,                       // argument 7
                                int intTagState,                            // argument 8
                                int nodeID,                                 // argument 9
-                               __global float* root_cache,                 // argument 10
+                               __global float4 *root_cache,                 // argument 10
                                __global int* scalings,                     // argument 11
                                float scalar,                               // argument 12
                                float uFlowThresh,                          // argument 13
@@ -148,42 +148,47 @@ __kernel void InternalKernel(  __global float* node_cache,                 // ar
     // global index
     short gx = get_global_id(0);
     int gy = get_global_id(1);
-    long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gy*roundCharacters + gx;
-    float privateParentScratch = 1.0f;
-    short scale = 0;
+    long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gy*roundCharacters + gx*4;
+    float4 privateParentScratch = (float4)(1.0f);
+    //short scale = 0;
     if (intTagState == 1 && gy < sites && gx < characters)
     {
        privateParentScratch = node_cache[parentCharacterIndex];
-       scale = scalings[parentCharacterIndex];
+       //scale = scalings[parentCharacterIndex];
     }
-	float sum = 0.f;
+	float4 sum = (float4)(0.);
 	float4 vSum = (float4)(0.);
-	float childSum = 0.f;
-	int scaleScratch = scalings[childNodeIndex*sites*roundCharacters + gy*roundCharacters + gx];
+    float regSum[4] = {0., 0., 0., 0.};
+	//float childSum = 0.f;
+	//int scaleScratch = scalings[childNodeIndex*sites*roundCharacters + gy*roundCharacters + gx];
     __local float4 childScratch[BLOCK_SIZE*BLOCK_SIZE];
-    __local float4 modelScratch[BLOCK_SIZE*BLOCK_SIZE];
-    childScratch[ty*BLOCK_SIZE + tx] = vload4((childNodeIndex*sites*roundCharacters + roundCharacters*gy + tx*4)/4, node_cache);
-    modelScratch[tx*BLOCK_SIZE + ty] = vload4((nodeID*roundCharacters*roundCharacters + roundCharacters*gx + ty*4)/4, model); 
+    __local float4 modelScratch[BLOCK_SIZE*BLOCK_SIZE*4];
+    childScratch[ty*BLOCK_SIZE + tx] = node_cache[(childNodeIndex*sites*roundCharacters + roundCharacters*gy + tx*4)/4];
+    for (int i = 0; i < 4; i++)
+    {
+        modelScratch[tx*BLOCK_SIZE + i*BLOCK_SIZE*BLOCK_SIZE + ty] = model[(nodeID*roundCharacters*roundCharacters + roundCharacters*(gx + i*BLOCK_SIZE) + ty*4)/4]; 
+    }
     barrier(CLK_LOCAL_MEM_FENCE);
-	for (int i = 0; i < 16; i++)
-	{
+    for (int i = 0; i < 16; i++)
+    {
+        float4 tempChild = childScratch[ty*BLOCK_SIZE + i];
         //float4 tempChild = vload4((childNodeIndex*sites*roundCharacters + roundCharacters*gy + i*4)/4, node_cache);
         //float4 tempModel = vload4((nodeID*roundCharacters*roundCharacters + roundCharacters*gx + i*4)/4, model);
-        float4 tempChild = childScratch[ty*BLOCK_SIZE + i];
-        float4 tempModel = modelScratch[tx*BLOCK_SIZE + i];
-		vSum += tempChild * tempModel;
-		//sum += node_cache[childNodeIndex*sites*roundCharacters + roundCharacters*gy + i] 
-				//* model[nodeID*roundCharacters*roundCharacters + roundCharacters*gx + i];
-	}
-    sum = vSum.x + vSum.y + vSum.z + vSum.w;
+        float4 tempModel = modelScratch[(tx+j*BLOCK_SIZE)*BLOCK_SIZE + i];
+        vSum = tempChild * tempModel;
+        sum.x += vSum.x + vSum.y + vSum.z + vSum.w;
+        //sum += node_cache[childNodeIndex*sites*roundCharacters + roundCharacters*gy + i] 
+                // * model[nodeID*roundCharacters*roundCharacters + roundCharacters*gx + i];
+    }
 	privateParentScratch *= sum;
     if (gy < sites && gx < characters)
     {
-       scalings     [parentCharacterIndex]  = scale;
-       root_scalings[gy*roundCharacters+gx] = scale;
+       //scalings     [parentCharacterIndex]  = scale;
+       //root_scalings[gy*roundCharacters+gx] = scale;
        node_cache   [parentCharacterIndex]  = privateParentScratch;
        root_cache   [gy*roundCharacters+gx] = privateParentScratch;
     }
+
 	/*
     float sum = 0.f;
     float4 vSum = (float4)(0.);
