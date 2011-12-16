@@ -158,7 +158,6 @@ __kernel void InternalKernel(  __global float4 *node_cache,                 // a
     }
 	float4 sum = (float4)(0.);
 	float4 vSum = (float4)(0.);
-    float regSum[4] = {0., 0., 0., 0.};
 	//float childSum = 0.f;
 	//int scaleScratch = scalings[childNodeIndex*sites*roundCharacters + gy*roundCharacters + gx];
     __local float4 childScratch[BLOCK_SIZE*BLOCK_SIZE];
@@ -174,9 +173,18 @@ __kernel void InternalKernel(  __global float4 *node_cache,                 // a
         float4 tempChild = childScratch[ty*BLOCK_SIZE + i];
         //float4 tempChild = vload4((childNodeIndex*sites*roundCharacters + roundCharacters*gy + i*4)/4, node_cache);
         //float4 tempModel = vload4((nodeID*roundCharacters*roundCharacters + roundCharacters*gx + i*4)/4, model);
-        float4 tempModel = modelScratch[(tx+j*BLOCK_SIZE)*BLOCK_SIZE + i];
+        float4 tempModel = modelScratch[tx*BLOCK_SIZE + i];
         vSum = tempChild * tempModel;
         sum.x += vSum.x + vSum.y + vSum.z + vSum.w;
+        tempModel = modelScratch[(tx+BLOCK_SIZE)*BLOCK_SIZE + i];
+        vSum = tempChild * tempModel;
+        sum.y += vSum.x + vSum.y + vSum.z + vSum.w;
+        tempModel = modelScratch[(tx+2*BLOCK_SIZE)*BLOCK_SIZE + i];
+        vSum = tempChild * tempModel;
+        sum.z += vSum.x + vSum.y + vSum.z + vSum.w;
+        tempModel = modelScratch[(tx+3*BLOCK_SIZE)*BLOCK_SIZE + i];
+        vSum = tempChild * tempModel;
+        sum.w += vSum.x + vSum.y + vSum.z + vSum.w;
         //sum += node_cache[childNodeIndex*sites*roundCharacters + roundCharacters*gy + i] 
                 // * model[nodeID*roundCharacters*roundCharacters + roundCharacters*gx + i];
     }
@@ -186,7 +194,8 @@ __kernel void InternalKernel(  __global float4 *node_cache,                 // a
        //scalings     [parentCharacterIndex]  = scale;
        //root_scalings[gy*roundCharacters+gx] = scale;
        node_cache   [parentCharacterIndex]  = privateParentScratch;
-       root_cache   [gy*roundCharacters+gx] = privateParentScratch;
+       //root_cache   [gy*roundCharacters+gx] = privateParentScratch;
+       root_cache   [gy*roundCharacters+gx] = (float4)(0.4f);
     }
 
 	/*
