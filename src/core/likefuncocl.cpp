@@ -125,7 +125,7 @@ cl_mem cmScalings_cache;
 cl_mem cmFreq_cache;
 cl_mem cmProb_cache;
 cl_mem cmResult_cache;
-long siteCount, alphabetDimension;
+long realSiteCount, realAlphabetDimension;
 long* lNodeFlags;
 _SimpleList     updateNodes,
                 flatParents,
@@ -149,8 +149,8 @@ void _OCLEvaluator::init(   long esiteCount,
 {
     clean = false;
     contextSet = false;
-    siteCount = esiteCount;
-    alphabetDimension = ealphabetDimension;
+    realSiteCount = esiteCount;
+    realAlphabetDimension = ealphabetDimension;
     iNodeCache = eiNodeCache;
     mainSecs = 0.0;
     buffSecs = 0.0;
@@ -165,68 +165,8 @@ void _OCLEvaluator::init(   long esiteCount,
 // though honestly this solution is geared towards analyses with a larger number of sites.
 
 // *********************************************************************
-int _OCLEvaluator::setupContext(void)
+void _OCLEvaluator::setupDevices(void)
 {
-#ifdef __OCLPOSIX__
-    clock_gettime(CLOCK_MONOTONIC, &setupStart);
-#endif
-
-    long nodeFlagCount = flatLeaves.lLength*siteCount;
-    long nodeResCount = lNodeResolutions->GetUsed();
-    int roundCharacters = roundUpToNextPowerOfTwo(alphabetDimension);
-    //printf("Got the sizes of nodeRes and nodeFlag: %i, %i\n", nodeResCount, nodeFlagCount);
-
-    bool ambiguousNodes = true;
-    if (nodeResCount == 0)
-    {
-        nodeResCount++;
-        ambiguousNodes = false;
-    }
-
-    node_cache      = (void*)malloc(sizeof(cl_float)*roundCharacters*siteCount*(flatNodes.lLength));
-    nodRes_cache    = (void*)malloc(sizeof(cl_float)*roundUpToNextPowerOfTwo(nodeResCount));
-    nodFlag_cache   = (void*)malloc(sizeof(cl_long)*roundUpToNextPowerOfTwo(nodeFlagCount));
-    scalings_cache  = (void*)malloc(sizeof(cl_int)*roundCharacters*siteCount*(flatNodes.lLength));
-    prob_cache      = (void*)malloc(sizeof(cl_float)*roundCharacters);
-    freq_cache      = (void*)malloc(sizeof(cl_int)*siteCount);
-    freq_cache      = (void*)malloc(sizeof(cl_int)*siteCount);
-    root_cache      = (void*)malloc(sizeof(cl_float)*siteCount*roundCharacters);
-    root_scalings   = (void*)malloc(sizeof(cl_int)*siteCount*roundCharacters);
-#ifndef __pinned_reads__
-    result_cache    = (void*)malloc(sizeof(clfp)*roundUpToNextPowerOfTwo(siteCount));
-#endif
-    model           = (void*)malloc(sizeof(cl_float)*roundCharacters*roundCharacters*(flatParents.lLength-1));
-
-    //printf("Allocated all of the arrays!\n");
-    //printf("setup the model, fixed tagged internals!\n");
-    //printf("flatleaves: %ld\n", flatLeaves.lLength);
-    //printf("flatParents: %ld\n", flatParents.lLength);
-    //printf("flatCleaves: %i\n", flatCLeaves.lLength);
-    //printf("flatNodes: %ld\n", flatNodes.lLength);
-    //printf("updateNodes: %ld\n", updateNodes.lLength);
-    //printf("flatTree: %ld\n", flatTree.lLength);
-    //printf("nodeFlagCount: %i\n", nodeFlagCount);
-    //printf("nodeResCount: %i\n", nodeResCount);
-
-    //for (int i = 0; i < nodeCount*siteCount*alphabetDimension; i++)
-    //printf("siteCount: %ld, alphabetDimension: %ld \n", siteCount, alphabetDimension);
-    if (ambiguousNodes)
-        for (int i = 0; i < nodeResCount; i++)
-            ((float*)nodRes_cache)[i] = (float)(lNodeResolutions->theData[i]);
-    for (int i = 0; i < nodeFlagCount; i++)
-        ((long*)nodFlag_cache)[i] = lNodeFlags[i];
-    for (int i = 0; i < siteCount; i++)
-        ((int*)freq_cache)[i] = theFrequencies[i];
-    for (int i = 0; i < alphabetDimension; i++)
-        ((float*)prob_cache)[i] = theProbs[i];
-
-    //printf("Created all of the arrays!\n");
-
-    // alright, by now taggedInternals have been taken care of, and model has
-    // been filled with all of the transition matrices.
-
-
-    //**************************************************
 
     //Get an OpenCL platform
     ciErr1 = clGetPlatformIDs(1, &cpPlatform, NULL);
@@ -286,6 +226,95 @@ int _OCLEvaluator::setupContext(void)
     printf("sites: %ld\n", siteCount);
 
 */
+    //Create the context
+    cxGPUContext = clCreateContext(0, ciDeviceCount, cdDevices, NULL, NULL, &ciErr1);
+//    printf("clCreateContext...\n");
+    if (ciErr1 != CL_SUCCESS)
+    {
+        printf("Error in clCreateContext, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
+        Cleanup(EXIT_FAILURE);
+    }
+
+    // Create a command-queue
+    //cqCommandQueue = clCreateCommandQueue(cxGPUContext, cdDevice, 0, &ciErr1);
+    for (int i = 0; i < ciDeviceCount; i++)
+    {
+        commandQueues[i] = clCreateCommandQueue(cxGPUContext, cdDevices[i], 0, &ciErr1);
+        if (ciErr1 != CL_SUCCESS)
+        {
+            printf("Error in clCreateCommandQueue #%i, Line %u in file %s !!!\n\n", i,__LINE__, __FILE__);
+            Cleanup(EXIT_FAILURE);
+        }
+    
+    }
+    printf("Number of GPUs in use: %u\n", ciDeviceCount);
+//    printf("clCreateCommandQueue...\n");
+}
+
+
+int _OCLEvaluator::setupContext(int siteCount, int alphabetDimension)
+{
+#ifdef __OCLPOSIX__
+    clock_gettime(CLOCK_MONOTONIC, &setupStart);
+#endif
+
+    long nodeFlagCount = flatLeaves.lLength*siteCount;
+    long nodeResCount = lNodeResolutions->GetUsed();
+    int roundCharacters = roundUpToNextPowerOfTwo(alphabetDimension);
+    //printf("Got the sizes of nodeRes and nodeFlag: %i, %i\n", nodeResCount, nodeFlagCount);
+
+    bool ambiguousNodes = true;
+    if (nodeResCount == 0)
+    {
+        nodeResCount++;
+        ambiguousNodes = false;
+    }
+
+    //node_cache      = (void*)malloc(sizeof(cl_float)*roundCharacters*siteCount*(flatNodes.lLength));
+    nodRes_cache    = (void*)malloc(sizeof(cl_float)*roundUpToNextPowerOfTwo(nodeResCount));
+    nodFlag_cache   = (void*)malloc(sizeof(cl_long)*roundUpToNextPowerOfTwo(nodeFlagCount));
+    //scalings_cache  = (void*)malloc(sizeof(cl_int)*roundCharacters*siteCount*(flatNodes.lLength));
+    prob_cache      = (void*)malloc(sizeof(cl_float)*roundCharacters);
+    //freq_cache      = (void*)malloc(sizeof(cl_int)*siteCount);
+    freq_cache      = (void*)malloc(sizeof(cl_int)*siteCount);
+    //root_cache      = (void*)malloc(sizeof(cl_float)*siteCount*roundCharacters);
+    //root_scalings   = (void*)malloc(sizeof(cl_int)*siteCount*roundCharacters);
+#ifndef __pinned_reads__
+    result_cache    = (void*)malloc(sizeof(clfp)*roundUpToNextPowerOfTwo(siteCount));
+#endif
+    model           = (void*)malloc(sizeof(cl_float)*roundCharacters*roundCharacters*(flatParents.lLength-1));
+
+    //printf("Allocated all of the arrays!\n");
+    //printf("setup the model, fixed tagged internals!\n");
+    //printf("flatleaves: %ld\n", flatLeaves.lLength);
+    //printf("flatParents: %ld\n", flatParents.lLength);
+    //printf("flatCleaves: %i\n", flatCLeaves.lLength);
+    //printf("flatNodes: %ld\n", flatNodes.lLength);
+    //printf("updateNodes: %ld\n", updateNodes.lLength);
+    //printf("flatTree: %ld\n", flatTree.lLength);
+    //printf("nodeFlagCount: %i\n", nodeFlagCount);
+    //printf("nodeResCount: %i\n", nodeResCount);
+
+    //for (int i = 0; i < nodeCount*siteCount*alphabetDimension; i++)
+    //printf("siteCount: %ld, alphabetDimension: %ld \n", siteCount, alphabetDimension);
+    if (ambiguousNodes)
+        for (int i = 0; i < nodeResCount; i++)
+            ((float*)nodRes_cache)[i] = (float)(lNodeResolutions->theData[i]);
+    for (int i = 0; i < nodeFlagCount; i++)
+        ((long*)nodFlag_cache)[i] = lNodeFlags[i];
+    for (int i = 0; i < siteCount; i++)
+        ((int*)freq_cache)[i] = theFrequencies[i];
+    for (int i = 0; i < alphabetDimension; i++)
+        ((float*)prob_cache)[i] = theProbs[i];
+
+    //printf("Created all of the arrays!\n");
+
+    // alright, by now taggedInternals have been taken care of, and model has
+    // been filled with all of the transition matrices.
+
+
+    //**************************************************
+
 
     // set and log Global and Local work size dimensions
 
@@ -318,29 +347,6 @@ int _OCLEvaluator::setupContext(void)
 //    printf("Connecting to %s %s...\n", vendor_name, device_name);
 */
 
-    //Create the context
-    cxGPUContext = clCreateContext(0, ciDeviceCount, cdDevices, NULL, NULL, &ciErr1);
-//    printf("clCreateContext...\n");
-    if (ciErr1 != CL_SUCCESS)
-    {
-        printf("Error in clCreateContext, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
-        Cleanup(EXIT_FAILURE);
-    }
-
-    // Create a command-queue
-    //cqCommandQueue = clCreateCommandQueue(cxGPUContext, cdDevice, 0, &ciErr1);
-    for (int i = 0; i < ciDeviceCount; i++)
-    {
-        commandQueues[i] = clCreateCommandQueue(cxGPUContext, cdDevices[i], 0, &ciErr1);
-        if (ciErr1 != CL_SUCCESS)
-        {
-            printf("Error in clCreateCommandQueue #%i, Line %u in file %s !!!\n\n", i,__LINE__, __FILE__);
-            Cleanup(EXIT_FAILURE);
-        }
-    
-    }
-    printf("Number of GPUs in use: %u\n", ciDeviceCount);
-//    printf("clCreateCommandQueue...\n");
 
 
     //printf("Setup all of the OpenCL stuff!\n");
@@ -480,9 +486,15 @@ int _OCLEvaluator::setupContext(void)
     }
 */
 
+
+}
+
+void _OCLEvaluator::setupQueueContext(int siteCount, int alphabetDimension, int nodeResCount, int nodeFlagCount, int i)
+{
+
     // Create the kernel
     //ckKernel = clCreateKernel(cpProgram, "FirstLoop", &ciErr1);
-    for (int i = 0; i < ciDeviceCount; i++)
+    //for (int i = 0; i < ciDeviceCount; i++)
     {
 
         ckLeafKernel[i] = clCreateKernel(cpMLProgram, "LeafKernel", &ciErr1);
@@ -653,7 +665,7 @@ int _OCLEvaluator::setupContext(void)
 #endif
 }
 
-double _OCLEvaluator::oclmain(void)
+void _OCLEvaluator::doLF(int siteCount, int alphabetDimension, int i)
 {
     //printf("newLF!\n");
     //printf("LF");
@@ -711,7 +723,7 @@ double _OCLEvaluator::oclmain(void)
     // enqueueing the read and write buffers takes 1/2 the time, the kernel takes the other 1/2.
     // with no queueing, however, we still only see ~700lf/s, which isn't much better than the threaded CPU code.
 
-    for (int i = 0; i < ciDeviceCount; i++)
+    //for (int i = 0; i < ciDeviceCount; i++)
     {
         ciErr1 |= clEnqueueWriteBuffer(commandQueues[i], cmModel_cache, CL_FALSE, 0,
                     sizeof(cl_float)*roundCharacters*roundCharacters*(flatParents.lLength-1),
@@ -776,7 +788,7 @@ double _OCLEvaluator::oclmain(void)
                         ambig = 1;
                         break;
                     }
-            for (int i = 0; i < ciDeviceCount; i++)
+            //for (int i = 0; i < ciDeviceCount; i++)
             {
                 if (!ambig)
                 {
@@ -819,7 +831,7 @@ double _OCLEvaluator::oclmain(void)
             nodeCode -= flatLeaves.lLength;
             long nodeCodeTemp = nodeCode;
             int tempIntTagState = taggedInternals.lData[parentCode];
-            for (int i = 0; i < ciDeviceCount; i++)
+            //for (int i = 0; i < ciDeviceCount; i++)
             {
                 ciErr1 |= clSetKernelArg(ckInternalKernel[i], 5, sizeof(cl_long), (void*)&nodeCodeTemp);
                 ciErr1 |= clSetKernelArg(ckInternalKernel[i], 6, sizeof(cl_long), (void*)&parentCode);
@@ -866,7 +878,7 @@ double _OCLEvaluator::oclmain(void)
         }
     }
 
-    for (int i = 0; i < ciDeviceCount; i++)
+    //for (int i = 0; i < ciDeviceCount; i++)
     {
         #ifdef __GPUResults__
             size_t szGlobalWorkSize2 = 256;
@@ -906,6 +918,13 @@ double _OCLEvaluator::oclmain(void)
         printf("Error in clEnqueueNDRangeKernel, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
         Cleanup(EXIT_FAILURE);
     }
+}
+
+double _OCLEvaluator::oclmain(int siteCount, int alphabetDimension)
+{  
+
+    for (int i = 0; i < ciDeviceCount; i++)
+        doLF(siteCount, alphabetDimension, i);
 
     for (int i = 0; i < ciDeviceCount; i++)
         clFinish(commandQueues[i]);
@@ -1066,6 +1085,7 @@ double _OCLEvaluator::launchmdsocl( _SimpleList& eupdateNodes,
 
     if (!contextSet)
     {
+        setupDevices();
         theProbs = etheProbs;
         flatNodes = eflatNodes;
         flatCLeaves = eflatCLeaves;
@@ -1074,7 +1094,9 @@ double _OCLEvaluator::launchmdsocl( _SimpleList& eupdateNodes,
         flatParents = eflatParents;
         lNodeFlags = elNodeFlags;
         lNodeResolutions = elNodeResolutions;
-        setupContext();
+        setupContext(realSiteCount, realAlphabetDimension);
+        for (int i = 0; i < ciDeviceCount; i++)
+            setupQueueContext(realSiteCount/ciDeviceCount, realAlphabetDimension, i);
         contextSet = true;
     }
 

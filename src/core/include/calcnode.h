@@ -61,9 +61,12 @@ private:
 	// Oi, how do I not have to convert this into an object...
 	// alright, I can probably keep all of this in likefunc. That is because the LFEvaluation is done in the
 	// calc node
-	double oclmain(void);
+    void doLF(int siteCount, int alphabetDimension, int i);
+    void setupDevices(void);
+    void setupQueueContext(int siteCount, int alphabetDimension, int nodeResCount, int nodeFlagCount, int i);
+	double oclmain(int siteCount, int alphabetDimension);
 	bool contextSet;
-	int setupContext(void);
+	int setupContext(int siteCount, int alphabetDimension);
 
 
 public:
