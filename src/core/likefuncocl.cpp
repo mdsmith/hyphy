@@ -171,61 +171,6 @@ int _OCLEvaluator::setupContext(void)
     clock_gettime(CLOCK_MONOTONIC, &setupStart);
 #endif
 
-    long nodeFlagCount = flatLeaves.lLength*siteCount;
-    long nodeResCount = lNodeResolutions->GetUsed();
-    int roundCharacters = roundUpToNextPowerOfTwo(alphabetDimension);
-    //printf("Got the sizes of nodeRes and nodeFlag: %i, %i\n", nodeResCount, nodeFlagCount);
-
-    bool ambiguousNodes = true;
-    if (nodeResCount == 0)
-    {
-        nodeResCount++;
-        ambiguousNodes = false;
-    }
-
-    node_cache      = (void*)malloc(sizeof(cl_float)*roundCharacters*siteCount*(flatNodes.lLength));
-    nodRes_cache    = (void*)malloc(sizeof(cl_float)*roundUpToNextPowerOfTwo(nodeResCount));
-    nodFlag_cache   = (void*)malloc(sizeof(cl_long)*roundUpToNextPowerOfTwo(nodeFlagCount));
-    scalings_cache  = (void*)malloc(sizeof(cl_int)*roundCharacters*siteCount*(flatNodes.lLength));
-    prob_cache      = (void*)malloc(sizeof(cl_float)*roundCharacters);
-    freq_cache      = (void*)malloc(sizeof(cl_int)*siteCount);
-    freq_cache      = (void*)malloc(sizeof(cl_int)*siteCount);
-    root_cache      = (void*)malloc(sizeof(cl_float)*siteCount*roundCharacters);
-    root_scalings   = (void*)malloc(sizeof(cl_int)*siteCount*roundCharacters);
-#ifndef __pinned_reads__
-    result_cache    = (void*)malloc(sizeof(clfp)*roundUpToNextPowerOfTwo(siteCount));
-#endif
-    model           = (void*)malloc(sizeof(cl_float)*roundCharacters*roundCharacters*(flatParents.lLength-1));
-
-    //printf("Allocated all of the arrays!\n");
-    //printf("setup the model, fixed tagged internals!\n");
-    //printf("flatleaves: %ld\n", flatLeaves.lLength);
-    //printf("flatParents: %ld\n", flatParents.lLength);
-    //printf("flatCleaves: %i\n", flatCLeaves.lLength);
-    //printf("flatNodes: %ld\n", flatNodes.lLength);
-    //printf("updateNodes: %ld\n", updateNodes.lLength);
-    //printf("flatTree: %ld\n", flatTree.lLength);
-    //printf("nodeFlagCount: %i\n", nodeFlagCount);
-    //printf("nodeResCount: %i\n", nodeResCount);
-
-    //for (int i = 0; i < nodeCount*siteCount*alphabetDimension; i++)
-    //printf("siteCount: %ld, alphabetDimension: %ld \n", siteCount, alphabetDimension);
-    if (ambiguousNodes)
-        for (int i = 0; i < nodeResCount; i++)
-            ((float*)nodRes_cache)[i] = (float)(lNodeResolutions->theData[i]);
-    for (int i = 0; i < nodeFlagCount; i++)
-        ((long*)nodFlag_cache)[i] = lNodeFlags[i];
-    for (int i = 0; i < siteCount; i++)
-        ((int*)freq_cache)[i] = theFrequencies[i];
-    for (int i = 0; i < alphabetDimension; i++)
-        ((float*)prob_cache)[i] = theProbs[i];
-
-    //printf("Created all of the arrays!\n");
-
-    // alright, by now taggedInternals have been taken care of, and model has
-    // been filled with all of the transition matrices.
-
-
     //**************************************************
 
     //Get an OpenCL platform
@@ -264,6 +209,70 @@ int _OCLEvaluator::setupContext(void)
         Cleanup(EXIT_FAILURE);
     }
 
+    //**************************************************
+
+
+
+    long nodeFlagCount = flatLeaves.lLength*siteCount;
+    long nodeResCount = lNodeResolutions->GetUsed();
+    int roundCharacters = roundUpToNextPowerOfTwo(alphabetDimension);
+    //printf("Got the sizes of nodeRes and nodeFlag: %i, %i\n", nodeResCount, nodeFlagCount);
+
+    bool ambiguousNodes = true;
+    if (nodeResCount == 0)
+    {
+        nodeResCount++;
+        ambiguousNodes = false;
+    }
+
+    //node_cache      = (void*)malloc(sizeof(cl_float)*roundCharacters*(siteCount/ciDeviceCount)*(flatNodes.lLength));
+    // nodRes_cache will need to be divvied up properly or written as a whole. Probably written as a whole
+    nodRes_cache    = (void*)malloc(sizeof(cl_float)*roundUpToNextPowerOfTwo(nodeResCount));
+    // nodeFlag will also need to be written in part to every device
+    nodFlag_cache   = (void*)malloc(sizeof(cl_long)*roundUpToNextPowerOfTwo(nodeFlagCount));
+    //scalings_cache  = (void*)malloc(sizeof(cl_int)*roundCharacters*(siteCount/ciDeviceCount)*(flatNodes.lLength));
+    prob_cache      = (void*)malloc(sizeof(cl_float)*roundCharacters);
+    // freq_cache isn't scaled by the number of devices, as we'd have to have four different arrays on the host. Better
+    // to just write an offset part of this one array to each device.
+    freq_cache      = (void*)malloc(sizeof(cl_int)*siteCount);
+    //root_cache      = (void*)malloc(sizeof(cl_float)*(siteCount/ciDeviceCount)*roundCharacters);
+    //root_scalings   = (void*)malloc(sizeof(cl_int)*(siteCount/ciDeviceCount)*roundCharacters);
+//#ifndef __pinned_reads__
+    // this one cannot be reduced because it is what everything is read into at the end of each LF
+    result_cache    = (void*)malloc(sizeof(clfp)*roundUpToNextPowerOfTwo(siteCount));
+//#endif
+    model           = (void*)malloc(sizeof(cl_float)*roundCharacters*roundCharacters*(flatParents.lLength-1));
+
+    //printf("Allocated all of the arrays!\n");
+    //printf("setup the model, fixed tagged internals!\n");
+    //printf("flatleaves: %ld\n", flatLeaves.lLength);
+    //printf("flatParents: %ld\n", flatParents.lLength);
+    //printf("flatCleaves: %i\n", flatCLeaves.lLength);
+    //printf("flatNodes: %ld\n", flatNodes.lLength);
+    //printf("updateNodes: %ld\n", updateNodes.lLength);
+    //printf("flatTree: %ld\n", flatTree.lLength);
+    //printf("nodeFlagCount: %i\n", nodeFlagCount);
+    //printf("nodeResCount: %i\n", nodeResCount);
+
+    //for (int i = 0; i < nodeCount*siteCount*alphabetDimension; i++)
+    //printf("siteCount: %ld, alphabetDimension: %ld \n", siteCount, alphabetDimension);
+    if (ambiguousNodes)
+        for (int i = 0; i < nodeResCount; i++)
+            ((float*)nodRes_cache)[i] = (float)(lNodeResolutions->theData[i]);
+    for (int i = 0; i < nodeFlagCount; i++)
+        ((long*)nodFlag_cache)[i] = lNodeFlags[i];
+    for (int i = 0; i < siteCount; i++)
+        ((int*)freq_cache)[i] = theFrequencies[i];
+    for (int i = 0; i < alphabetDimension; i++)
+        ((float*)prob_cache)[i] = theProbs[i];
+
+    //printf("Created all of the arrays!\n");
+
+    // alright, by now taggedInternals have been taken care of, and model has
+    // been filled with all of the transition matrices.
+
+
+
 /* Broken with multiGPU setup
 
     size_t maxWorkGroupSize;
@@ -297,7 +306,8 @@ int _OCLEvaluator::setupContext(void)
     szLocalWorkSize[1] = 1;
 #endif
     szGlobalWorkSize[0] = 64;
-    szGlobalWorkSize[1] = ((siteCount + 16)/16)*16;
+    //szGlobalWorkSize[1] = ((siteCount + 16)/16)*16;
+    szGlobalWorkSize[1] = (((siteCount/ciDeviceCount) + 16)/16)*16;
     //szGlobalWorkSize[1] = roundUpToNextPowerOfTwo(siteCount);
     printf("Global Work Size \t\t= %ld, %ld\nLocal Work Size \t\t= %ld, %ld\n# of Work Groups \t\t= %ld\n\n",
            (long unsigned) szGlobalWorkSize[0],
@@ -348,44 +358,47 @@ int _OCLEvaluator::setupContext(void)
     // Allocate the OpenCL buffer memory objects for the input and output on the
     // device GMEM
     cmNode_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_WRITE,
-                    sizeof(cl_float)*roundCharacters*siteCount*(flatNodes.lLength), NULL,
+                    sizeof(cl_float)*roundCharacters*(siteCount/ciDeviceCount)*(flatNodes.lLength), NULL,
                     &ciErr1);
     cmModel_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_ONLY,
                     sizeof(cl_float)*roundCharacters*roundCharacters*(flatParents.lLength-1),
                     NULL, &ciErr2);
     ciErr1 |= ciErr2;
     cmScalings_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_WRITE,
-                    sizeof(cl_int)*roundCharacters*siteCount*flatNodes.lLength, NULL, &ciErr2);
+                    sizeof(cl_int)*roundCharacters*(siteCount/ciDeviceCount)*flatNodes.lLength, NULL, &ciErr2);
     ciErr1 |= ciErr2;
     cmNodRes_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_ONLY,
                     sizeof(cl_float)*roundUpToNextPowerOfTwo(nodeResCount), NULL, &ciErr2);
     ciErr1 |= ciErr2;
+    // this needs to be scaled by the number of devices because nodeFlagCount is a multiple of siteCount
     cmNodFlag_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_ONLY,
-                    sizeof(cl_long)*roundUpToNextPowerOfTwo(nodeFlagCount), NULL, &ciErr2);
+                    sizeof(cl_long)*(roundUpToNextPowerOfTwo(nodeFlagCount)/ciDeviceCount), NULL, &ciErr2);
     ciErr1 |= ciErr2;
     cmroot_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_WRITE,
-                    sizeof(cl_float)*siteCount*roundCharacters, NULL, &ciErr2);
+                    sizeof(cl_float)*(siteCount/ciDeviceCount)*roundCharacters, NULL, &ciErr2);
     ciErr1 |= ciErr2;
     cmroot_scalings = clCreateBuffer(cxGPUContext, CL_MEM_READ_WRITE,
-                    sizeof(cl_int)*siteCount*roundCharacters, NULL, &ciErr2);
+                    sizeof(cl_int)*(siteCount/ciDeviceCount)*roundCharacters, NULL, &ciErr2);
     ciErr1 |= ciErr2;
     cmProb_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_ONLY,
                     sizeof(cl_float)*roundCharacters, NULL, &ciErr2);
     ciErr1 |= ciErr2;
+    // cmFreq_cache is scaled down by the number of devices here, as only a part of the host array
+    // will be written to each device. 
     cmFreq_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_ONLY,
-                    sizeof(cl_float)*siteCount, NULL, &ciErr2);
+                    sizeof(cl_float)*(siteCount/ciDeviceCount), NULL, &ciErr2);
     ciErr1 |= ciErr2;
 
-#ifdef __pinned_reads__
+/*#ifdef __pinned_reads__
     cmResult_cache = clCreateBuffer(cxGPUContext, CL_MEM_WRITE_ONLY | CL_MEM_ALLOC_HOST_PTR,
-                    sizeof(clfp)*roundUpToNextPowerOfTwo(siteCount), NULL, &ciErr2);
+                    sizeof(clfp)*(roundUpToNextPowerOfTwo(siteCount)/ciDeviceCount), NULL, &ciErr2);
     result_cache = (fpoint*)clEnqueueMapBuffer(cqCommandQueue, cmResult_cache, CL_TRUE, 
-                    CL_MAP_READ, 0, sizeof(clfp)*roundUpToNextPowerOfTwo(siteCount), 0, 
+                    CL_MAP_READ, 0, sizeof(clfp)*(roundUpToNextPowerOfTwo(siteCount)/ciDeviceCount), 0, 
                     NULL, NULL, NULL);
-#else
+#else*/
     cmResult_cache = clCreateBuffer(cxGPUContext, CL_MEM_WRITE_ONLY,
-                    sizeof(clfp)*roundUpToNextPowerOfTwo(siteCount), NULL, &ciErr2);
-#endif
+                    sizeof(clfp)*(roundUpToNextPowerOfTwo(siteCount)/ciDeviceCount), NULL, &ciErr2);
+//#endif
     ciErr1 |= ciErr2;
 //    printf("clCreateBuffer...\n");
     if (ciErr1 != CL_SUCCESS)
@@ -607,11 +620,12 @@ int _OCLEvaluator::setupContext(void)
         ciErr1 |= clEnqueueWriteBuffer(commandQueues[i], cmNodRes_cache, CL_FALSE, 0,
                     sizeof(cl_float)*roundUpToNextPowerOfTwo(nodeResCount), nodRes_cache, 0, NULL, NULL);
         ciErr1 |= clEnqueueWriteBuffer(commandQueues[i], cmNodFlag_cache, CL_FALSE, 0,
-                    sizeof(cl_long)*roundUpToNextPowerOfTwo(nodeFlagCount), nodFlag_cache, 0, NULL, NULL);
+                    sizeof(cl_long)*roundUpToNextPowerOfTwo(nodeFlagCount)/ciDeviceCount, 
+                    nodFlag_cache + i*(sizeof(cl_long)*roundUpToNextPowerOfTwo(nodeFlagCount)/ciDeviceCount), 0, NULL, NULL);
         ciErr1 |= clEnqueueWriteBuffer(commandQueues[i], cmProb_cache, CL_FALSE, 0,
                     sizeof(cl_float)*roundCharacters, prob_cache, 0, NULL, NULL);
         ciErr1 |= clEnqueueWriteBuffer(commandQueues[i], cmFreq_cache, CL_FALSE, 0,
-                    sizeof(cl_int)*siteCount, freq_cache, 0, NULL, NULL);
+                    sizeof(cl_int)*(siteCount/ciDeviceCount), freq_cache + i*(sizeof(cl_int)*(siteCount/ciDeviceCount)), 0, NULL, NULL);
         
         //printf("clEnqueueWriteBuffer (root_cache, etc.)...");
         if (ciErr1 != CL_SUCCESS)
@@ -620,6 +634,7 @@ int _OCLEvaluator::setupContext(void)
             Cleanup(EXIT_FAILURE);
         }
     }
+
 
 #ifdef __VERBOSE__
 /*
@@ -717,6 +732,7 @@ double _OCLEvaluator::oclmain(void)
                     sizeof(cl_float)*roundCharacters*roundCharacters*(flatParents.lLength-1),
                     model, 0, NULL, NULL);
     }
+
 
 #ifdef __OCLPOSIX__
     clock_gettime(CLOCK_MONOTONIC, &bufferEnd);
@@ -930,9 +946,16 @@ double _OCLEvaluator::oclmain(void)
     //ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
     //        sizeof(clfp)*roundUpToNextPowerOfTwo(siteCount), result_cache, 0,
      //       NULL, NULL);
+/*
     ciErr1 = clEnqueueReadBuffer(commandQueues[0], cmResult_cache, CL_TRUE, 0,
             sizeof(clfp)*siteCount, result_cache, 0,
             NULL, NULL);
+*/
+
+    for (int i = 0; i < ciDeviceCount; i++)
+        ciErr1 = clEnqueueReadBuffer(commandQueues[i], cmResult_cache, CL_TRUE, 0,
+                ((sizeof(clfp)*siteCount)/ciDeviceCount), result_cache + (i * ((sizeof(clfp)*siteCount)/ciDeviceCount)), 0,
+                NULL, NULL);
 #endif
 /*
     ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
