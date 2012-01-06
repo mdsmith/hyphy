@@ -259,6 +259,12 @@ int _OCLEvaluator::setupContext(void)
     if (ambiguousNodes)
         for (int i = 0; i < nodeResCount; i++)
             ((float*)nodRes_cache)[i] = (float)(lNodeResolutions->theData[i]);
+    for (int i = 0; i < ciDevicecount; i++)
+    {
+        for (int j = 0; j < flatLeaves.lLength; j++)
+            for (int k = 0; k < siteCount/ciDeviceCount; k++)
+                ((long*)nodeFlag_cache[]) = lNodeFlags[j*(];
+    }
     for (int i = 0; i < nodeFlagCount; i++)
         ((long*)nodFlag_cache)[i] = lNodeFlags[i];
     for (int i = 0; i < siteCount; i++)
@@ -535,7 +541,7 @@ int _OCLEvaluator::setupContext(void)
         }
 
         long tempLeafState = 1;
-        long tempSiteCount = siteCount;
+        long tempSiteCount = (siteCount/ciDeviceCount);
         long tempCharCount = alphabetDimension;
         long tempChildNodeIndex = 0;
         long tempParentNodeIndex = 0;
