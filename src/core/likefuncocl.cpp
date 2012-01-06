@@ -25,6 +25,8 @@
 //#define FLOAT
 //#define OCLVERBOSE
 
+const unsigned int MAX_GPU_COUNT = 8;
+
 #if defined(__APPLE__) || defined(APPLE)
 #include <OpenCL/OpenCL.h>
 typedef float fpoint;
@@ -34,7 +36,7 @@ typedef cl_float clfp;
 #define PRAGMADEF " \n"
 //#pragma OPENCL EXTENSION cl_khr_fp64: enable
 #elif defined(__NVIDIAOCL__)
-#define __GPUResults__
+//#define __GPUResults__
 #define __OCLPOSIX__
 //#include <oclUtils.h>
 #include <CL/opencl.h>
@@ -89,18 +91,22 @@ bool clean;
 
 cl_context cxGPUContext;        // OpenCL context
 cl_command_queue cqCommandQueue;// OpenCL command que
+cl_command_queue commandQueues[MAX_GPU_COUNT];
 cl_platform_id cpPlatform;      // OpenCL platform
+cl_device_id* cdDevices;          // OpenCL device
 cl_device_id cdDevice;          // OpenCL device
+cl_uint ciDeviceCount;
+int deviceNr[MAX_GPU_COUNT];
 cl_program cpMLProgram;
 //cl_program cpLeafProgram;
 //cl_program cpInternalProgram;
 //cl_program cpAmbigProgram;
 //cl_program cpResultProgram;
-cl_kernel ckLeafKernel;
-cl_kernel ckInternalKernel;
-cl_kernel ckAmbigKernel;
-cl_kernel ckResultKernel;
-cl_kernel ckReductionKernel;
+cl_kernel ckLeafKernel[MAX_GPU_COUNT];
+cl_kernel ckInternalKernel[MAX_GPU_COUNT];
+cl_kernel ckAmbigKernel[MAX_GPU_COUNT];
+cl_kernel ckResultKernel[MAX_GPU_COUNT];
+cl_kernel ckReductionKernel[MAX_GPU_COUNT];
 size_t szGlobalWorkSize[2];        // 1D var for Total # of work items
 size_t szLocalWorkSize[2];         // 1D var for # of work items in the work group
 size_t localMemorySize;         // size of local memory buffer for kernel scratch
@@ -133,6 +139,7 @@ _Parameter      *iNodeCache,
 _SimpleList taggedInternals;
 _GrowingVector* lNodeResolutions;
 float scalar;
+int sitesPerGPU;
 
 void *node_cache, *nodRes_cache, *nodFlag_cache, *scalings_cache, *prob_cache, *freq_cache, *root_cache, *result_cache, *root_scalings, *model;
 
@@ -234,7 +241,19 @@ int _OCLEvaluator::setupContext(void)
 
     //Get the devices
 #ifdef OCLGPU
-    ciErr1 = clGetDeviceIDs(cpPlatform, CL_DEVICE_TYPE_GPU, 1, &cdDevice, NULL);
+    ciErr1 = clGetDeviceIDs(cpPlatform, CL_DEVICE_TYPE_GPU, 0, NULL, &ciDeviceCount);
+    if (ciErr1 != CL_SUCCESS)
+    {
+        printf("Could not get number of devices");
+    }
+    //ciDeviceCount = 1;
+    cdDevices = (cl_device_id *)malloc(ciDeviceCount * sizeof(cl_device_id));
+    ciErr1 = clGetDeviceIDs(cpPlatform, CL_DEVICE_TYPE_GPU, ciDeviceCount, cdDevices, NULL);
+    if (ciErr1 != CL_SUCCESS)
+    {
+        printf("Could not get devices");
+    }
+
 #else
     ciErr1 = clGetDeviceIDs(cpPlatform, CL_DEVICE_TYPE_CPU, 1, &cdDevice, NULL);
 #endif
@@ -244,6 +263,8 @@ int _OCLEvaluator::setupContext(void)
         printf("Error in clGetDeviceIDs, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
         Cleanup(EXIT_FAILURE);
     }
+
+/* Broken with multiGPU setup
 
     size_t maxWorkGroupSize;
     ciErr1 = clGetDeviceInfo(cdDevice, CL_DEVICE_MAX_WORK_GROUP_SIZE,
@@ -264,6 +285,8 @@ int _OCLEvaluator::setupContext(void)
 
     printf("sites: %ld\n", siteCount);
 
+*/
+
     // set and log Global and Local work size dimensions
 
 #ifdef OCLGPU
@@ -283,7 +306,7 @@ int _OCLEvaluator::setupContext(void)
            (long unsigned) szLocalWorkSize[1],
            (long unsigned) ((szGlobalWorkSize[0]*szGlobalWorkSize[1])/(szLocalWorkSize[0]*szLocalWorkSize[1])));
 
-
+/*
     size_t returned_size = 0;
     cl_char vendor_name[1024] = {0};
     cl_char device_name[1024] = {0};
@@ -293,9 +316,10 @@ int _OCLEvaluator::setupContext(void)
                               device_name, &returned_size);
     assert(ciErr1 == CL_SUCCESS);
 //    printf("Connecting to %s %s...\n", vendor_name, device_name);
+*/
 
     //Create the context
-    cxGPUContext = clCreateContext(0, 1, &cdDevice, NULL, NULL, &ciErr1);
+    cxGPUContext = clCreateContext(0, ciDeviceCount, cdDevices, NULL, NULL, &ciErr1);
 //    printf("clCreateContext...\n");
     if (ciErr1 != CL_SUCCESS)
     {
@@ -304,34 +328,40 @@ int _OCLEvaluator::setupContext(void)
     }
 
     // Create a command-queue
-    cqCommandQueue = clCreateCommandQueue(cxGPUContext, cdDevice, 0, &ciErr1);
-//    printf("clCreateCommandQueue...\n");
-    if (ciErr1 != CL_SUCCESS)
+    //cqCommandQueue = clCreateCommandQueue(cxGPUContext, cdDevice, 0, &ciErr1);
+    for (int i = 0; i < ciDeviceCount; i++)
     {
-        printf("Error in clCreateCommandQueue, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
-        Cleanup(EXIT_FAILURE);
+        commandQueues[i] = clCreateCommandQueue(cxGPUContext, cdDevices[i], 0, &ciErr1);
+        if (ciErr1 != CL_SUCCESS)
+        {
+            printf("Error in clCreateCommandQueue #%i, Line %u in file %s !!!\n\n", i,__LINE__, __FILE__);
+            Cleanup(EXIT_FAILURE);
+        }
+    
     }
+    printf("Number of GPUs in use: %u\n", ciDeviceCount);
+//    printf("clCreateCommandQueue...\n");
 
 
     //printf("Setup all of the OpenCL stuff!\n");
 
     // Allocate the OpenCL buffer memory objects for the input and output on the
     // device GMEM
-    cmNode_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR,
-                    sizeof(cl_float)*roundCharacters*siteCount*(flatNodes.lLength), node_cache,
+    cmNode_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_WRITE,
+                    sizeof(cl_float)*roundCharacters*siteCount*(flatNodes.lLength), NULL,
                     &ciErr1);
     cmModel_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_ONLY,
                     sizeof(cl_float)*roundCharacters*roundCharacters*(flatParents.lLength-1),
                     NULL, &ciErr2);
     ciErr1 |= ciErr2;
-    cmScalings_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR,
-                    sizeof(cl_int)*roundCharacters*siteCount*flatNodes.lLength, scalings_cache, &ciErr2);
+    cmScalings_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_WRITE,
+                    sizeof(cl_int)*roundCharacters*siteCount*flatNodes.lLength, NULL, &ciErr2);
     ciErr1 |= ciErr2;
-    cmNodRes_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR,
-                    sizeof(cl_float)*roundUpToNextPowerOfTwo(nodeResCount), nodRes_cache, &ciErr2);
+    cmNodRes_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_ONLY,
+                    sizeof(cl_float)*roundUpToNextPowerOfTwo(nodeResCount), NULL, &ciErr2);
     ciErr1 |= ciErr2;
-    cmNodFlag_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR,
-                    sizeof(cl_long)*roundUpToNextPowerOfTwo(nodeFlagCount), nodFlag_cache, &ciErr2);
+    cmNodFlag_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_ONLY,
+                    sizeof(cl_long)*roundUpToNextPowerOfTwo(nodeFlagCount), NULL, &ciErr2);
     ciErr1 |= ciErr2;
     cmroot_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_WRITE,
                     sizeof(cl_float)*siteCount*roundCharacters, NULL, &ciErr2);
@@ -339,8 +369,8 @@ int _OCLEvaluator::setupContext(void)
     cmroot_scalings = clCreateBuffer(cxGPUContext, CL_MEM_READ_WRITE,
                     sizeof(cl_int)*siteCount*roundCharacters, NULL, &ciErr2);
     ciErr1 |= ciErr2;
-    cmProb_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR,
-                    sizeof(cl_float)*roundCharacters, prob_cache, &ciErr2);
+    cmProb_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_ONLY,
+                    sizeof(cl_float)*roundCharacters, NULL, &ciErr2);
     ciErr1 |= ciErr2;
     cmFreq_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_ONLY,
                     sizeof(cl_float)*siteCount, NULL, &ciErr2);
@@ -393,7 +423,7 @@ int _OCLEvaluator::setupContext(void)
         Cleanup(EXIT_FAILURE);
     }
 
-    ciErr1 = clBuildProgram(cpMLProgram, 1, &cdDevice, "-cl-mad-enable -cl-fast-relaxed-math", NULL, NULL);
+    ciErr1 = clBuildProgram(cpMLProgram, 0, NULL, "-cl-mad-enable -cl-fast-relaxed-math", NULL, NULL);
     //ciErr1 = clBuildProgram(cpMLProgram, 1, &cdDevice, NULL, NULL, NULL);
     if (ciErr1 != CL_SUCCESS)
     {
@@ -416,6 +446,7 @@ int _OCLEvaluator::setupContext(void)
     }
 
 
+/*
     // Shows the log
     char* build_log;
     size_t log_size;
@@ -447,45 +478,151 @@ int _OCLEvaluator::setupContext(void)
         printf("Error in clBuildProgram, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
         Cleanup(EXIT_FAILURE);
     }
+*/
 
     // Create the kernel
     //ckKernel = clCreateKernel(cpProgram, "FirstLoop", &ciErr1);
-    ckLeafKernel = clCreateKernel(cpMLProgram, "LeafKernel", &ciErr1);
-    //printf("clCreateKernel (LeafKernel)...\n");
-    if (ciErr1 != CL_SUCCESS)
+    for (int i = 0; i < ciDeviceCount; i++)
     {
-        printf("Error in clCreateKernel, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
-        Cleanup(EXIT_FAILURE);
+
+        ckLeafKernel[i] = clCreateKernel(cpMLProgram, "LeafKernel", &ciErr1);
+        //printf("clCreateKernel (LeafKernel)...\n");
+        if (ciErr1 != CL_SUCCESS)
+        {
+            printf("Error in clCreateKernel, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
+            Cleanup(EXIT_FAILURE);
+        }
+        ckAmbigKernel[i] = clCreateKernel(cpMLProgram, "AmbigKernel", &ciErr1);
+        //printf("clCreateKernel (AmbigKernel)...\n");
+        if (ciErr1 != CL_SUCCESS)
+        {
+            printf("Error in clCreateKernel, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
+            Cleanup(EXIT_FAILURE);
+        }
+        ckInternalKernel[i] = clCreateKernel(cpMLProgram, "InternalKernel", &ciErr1);
+        //printf("clCreateKernel (InternalKernel)...\n");
+        if (ciErr1 != CL_SUCCESS)
+        {
+            printf("Error in clCreateKernel, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
+            Cleanup(EXIT_FAILURE);
+        }
+        ckResultKernel[i] = clCreateKernel(cpMLProgram, "ResultKernel", &ciErr1);
+        //printf("clCreateKernel (ResultKernel)...\n");
+        if (ciErr1 != CL_SUCCESS)
+        {
+            printf("Error in clCreateKernel, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
+            Cleanup(EXIT_FAILURE);
+        }
+        ckReductionKernel[i] = clCreateKernel(cpMLProgram, "ReductionKernel", &ciErr1);
+        //printf("clCreateKernel (ReductionKernel)...\n");
+        if (ciErr1 != CL_SUCCESS)
+        {
+            printf("Error in clCreateKernel, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
+            Cleanup(EXIT_FAILURE);
+        }
+
+        long tempLeafState = 1;
+        long tempSiteCount = siteCount;
+        long tempCharCount = alphabetDimension;
+        long tempChildNodeIndex = 0;
+        long tempParentNodeIndex = 0;
+        long tempRoundCharCount = roundUpToNextPowerOfTwo(alphabetDimension);
+        int  tempTagIntState = 0;
+        int   tempNodeID = 0;
+        float tempScalar = scalar;
+        // this is currently ignored, 1 is hardcoded into the kernel code. 
+        float tempuFlowThresh = 0.000000001f;
+
+        ciErr1  = clSetKernelArg(ckLeafKernel[i], 0, sizeof(cl_mem), (void*)&cmNode_cache);
+        ciErr1 |= clSetKernelArg(ckLeafKernel[i], 1, sizeof(cl_mem), (void*)&cmModel_cache);
+        ciErr1 |= clSetKernelArg(ckLeafKernel[i], 2, sizeof(cl_mem), (void*)&cmNodRes_cache);
+        ciErr1 |= clSetKernelArg(ckLeafKernel[i], 3, sizeof(cl_mem), (void*)&cmNodFlag_cache);
+        ciErr1 |= clSetKernelArg(ckLeafKernel[i], 4, sizeof(cl_long), (void*)&tempSiteCount);
+        ciErr1 |= clSetKernelArg(ckLeafKernel[i], 5, sizeof(cl_long), (void*)&tempCharCount);
+        ciErr1 |= clSetKernelArg(ckLeafKernel[i], 6, sizeof(cl_long), (void*)&tempChildNodeIndex); // reset this in the loop
+        ciErr1 |= clSetKernelArg(ckLeafKernel[i], 7, sizeof(cl_long), (void*)&tempParentNodeIndex); // reset this in the loop
+        ciErr1 |= clSetKernelArg(ckLeafKernel[i], 8, sizeof(cl_long), (void*)&tempRoundCharCount);
+        ciErr1 |= clSetKernelArg(ckLeafKernel[i], 9, sizeof(cl_int), (void*)&tempTagIntState); // reset this in the loop
+        ciErr1 |= clSetKernelArg(ckLeafKernel[i], 10, sizeof(cl_int), (void*)&tempNodeID); // reset this in the loop
+        ciErr1 |= clSetKernelArg(ckLeafKernel[i], 11, sizeof(cl_mem), (void*)&cmScalings_cache);
+        ciErr1 |= clSetKernelArg(ckLeafKernel[i], 12, sizeof(cl_float), (void*)&tempScalar);
+        ciErr1 |= clSetKernelArg(ckLeafKernel[i], 13, sizeof(cl_float), (void*)&tempuFlowThresh);
+
+        ciErr1 |= clSetKernelArg(ckAmbigKernel[i], 0, sizeof(cl_mem), (void*)&cmNode_cache);
+        ciErr1 |= clSetKernelArg(ckAmbigKernel[i], 1, sizeof(cl_mem), (void*)&cmModel_cache);
+        ciErr1 |= clSetKernelArg(ckAmbigKernel[i], 2, sizeof(cl_mem), (void*)&cmNodRes_cache);
+        ciErr1 |= clSetKernelArg(ckAmbigKernel[i], 3, sizeof(cl_mem), (void*)&cmNodFlag_cache);
+        ciErr1 |= clSetKernelArg(ckAmbigKernel[i], 4, sizeof(cl_long), (void*)&tempSiteCount);
+        ciErr1 |= clSetKernelArg(ckAmbigKernel[i], 5, sizeof(cl_long), (void*)&tempCharCount);
+        ciErr1 |= clSetKernelArg(ckAmbigKernel[i], 6, sizeof(cl_long), (void*)&tempChildNodeIndex); // reset this in the loop
+        ciErr1 |= clSetKernelArg(ckAmbigKernel[i], 7, sizeof(cl_long), (void*)&tempParentNodeIndex); // reset this in the loop
+        ciErr1 |= clSetKernelArg(ckAmbigKernel[i], 8, sizeof(cl_long), (void*)&tempRoundCharCount);
+        ciErr1 |= clSetKernelArg(ckAmbigKernel[i], 9, sizeof(cl_int), (void*)&tempTagIntState);
+        ciErr1 |= clSetKernelArg(ckAmbigKernel[i], 10, sizeof(cl_int), (void*)&tempNodeID);
+        ciErr1 |= clSetKernelArg(ckAmbigKernel[i], 11, sizeof(cl_mem), (void*)&cmScalings_cache);
+        ciErr1 |= clSetKernelArg(ckAmbigKernel[i], 12, sizeof(cl_float), (void*)&tempScalar);
+        ciErr1 |= clSetKernelArg(ckAmbigKernel[i], 13, sizeof(cl_float), (void*)&tempuFlowThresh);
+
+        ciErr1 |= clSetKernelArg(ckInternalKernel[i], 0, sizeof(cl_mem), (void*)&cmNode_cache);
+        ciErr1 |= clSetKernelArg(ckInternalKernel[i], 1, sizeof(cl_mem), (void*)&cmModel_cache);
+        ciErr1 |= clSetKernelArg(ckInternalKernel[i], 2, sizeof(cl_mem), (void*)&cmNodRes_cache);
+        ciErr1 |= clSetKernelArg(ckInternalKernel[i], 3, sizeof(cl_long), (void*)&tempSiteCount);
+        ciErr1 |= clSetKernelArg(ckInternalKernel[i], 4, sizeof(cl_long), (void*)&tempCharCount);
+        ciErr1 |= clSetKernelArg(ckInternalKernel[i], 5, sizeof(cl_long), (void*)&tempChildNodeIndex); // reset this in the loop
+        ciErr1 |= clSetKernelArg(ckInternalKernel[i], 6, sizeof(cl_long), (void*)&tempParentNodeIndex); // reset this in the loop
+        ciErr1 |= clSetKernelArg(ckInternalKernel[i], 7, sizeof(cl_long), (void*)&tempRoundCharCount);
+        ciErr1 |= clSetKernelArg(ckInternalKernel[i], 8, sizeof(cl_int), (void*)&tempTagIntState); // reset this in the loop
+        ciErr1 |= clSetKernelArg(ckInternalKernel[i], 9, sizeof(cl_int), (void*)&tempNodeID); // reset this in the loop
+        ciErr1 |= clSetKernelArg(ckInternalKernel[i], 10, sizeof(cl_mem), (void*)&cmroot_cache);
+        ciErr1 |= clSetKernelArg(ckInternalKernel[i], 11, sizeof(cl_mem), (void*)&cmScalings_cache);
+        ciErr1 |= clSetKernelArg(ckInternalKernel[i], 12, sizeof(cl_float), (void*)&tempScalar);
+        ciErr1 |= clSetKernelArg(ckInternalKernel[i], 13, sizeof(cl_float), (void*)&tempuFlowThresh);
+        ciErr1 |= clSetKernelArg(ckInternalKernel[i], 14, sizeof(cl_mem), (void*)&cmroot_scalings);
+
+        ciErr1 |= clSetKernelArg(ckResultKernel[i], 0, sizeof(cl_mem), (void*)&cmFreq_cache);
+        ciErr1 |= clSetKernelArg(ckResultKernel[i], 1, sizeof(cl_mem), (void*)&cmProb_cache);
+        ciErr1 |= clSetKernelArg(ckResultKernel[i], 2, sizeof(cl_mem), (void*)&cmResult_cache);
+        ciErr1 |= clSetKernelArg(ckResultKernel[i], 3, sizeof(cl_mem), (void*)&cmroot_cache);
+        ciErr1 |= clSetKernelArg(ckResultKernel[i], 4, sizeof(cl_mem), (void*)&cmroot_scalings);
+        ciErr1 |= clSetKernelArg(ckResultKernel[i], 5, sizeof(cl_long), (void*)&tempSiteCount);
+        ciErr1 |= clSetKernelArg(ckResultKernel[i], 6, sizeof(cl_long), (void*)&tempRoundCharCount);
+        ciErr1 |= clSetKernelArg(ckResultKernel[i], 7, sizeof(cl_float), (void*)&tempScalar);
+        ciErr1 |= clSetKernelArg(ckResultKernel[i], 8, sizeof(cl_long), (void*)&tempCharCount);
+
+        ciErr1 |= clSetKernelArg(ckReductionKernel[i], 0, sizeof(cl_mem), (void*)&cmResult_cache);
+
+        //printf("clSetKernelArg 0 - 12...\n\n");
+        if (ciErr1 != CL_SUCCESS)
+        {
+            printf("Error in clSetKernelArg, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
+            Cleanup(EXIT_FAILURE);
+        }
+
+/* 
+        ciErr1 |= clEnqueueWriteBuffer(commandQueues[i], cmNode_cache, CL_FALSE, 0,
+                    sizeof(cl_float)*roundCharacters*siteCount*(flatNodes.lLength), node_cache, 0, NULL, NULL);
+        ciErr1 |= clEnqueueWriteBuffer(commandQueues[i], cmScalings_cache, CL_FALSE, 0,
+                    sizeof(cl_int)*roundCharacters*siteCount*(flatNodes.lLength), scalings_cache, 0, NULL, NULL);
+*/
+        ciErr1 |= clEnqueueWriteBuffer(commandQueues[i], cmNodRes_cache, CL_FALSE, 0,
+                    sizeof(cl_float)*roundUpToNextPowerOfTwo(nodeResCount), nodRes_cache, 0, NULL, NULL);
+        ciErr1 |= clEnqueueWriteBuffer(commandQueues[i], cmNodFlag_cache, CL_FALSE, 0,
+                    sizeof(cl_long)*roundUpToNextPowerOfTwo(nodeFlagCount), nodFlag_cache, 0, NULL, NULL);
+        ciErr1 |= clEnqueueWriteBuffer(commandQueues[i], cmProb_cache, CL_FALSE, 0,
+                    sizeof(cl_float)*roundCharacters, prob_cache, 0, NULL, NULL);
+        ciErr1 |= clEnqueueWriteBuffer(commandQueues[i], cmFreq_cache, CL_FALSE, 0,
+                    sizeof(cl_int)*siteCount, freq_cache, 0, NULL, NULL);
+        
+        //printf("clEnqueueWriteBuffer (root_cache, etc.)...");
+        if (ciErr1 != CL_SUCCESS)
+        {
+            printf("Error in clEnqueueWriteBuffer, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
+            Cleanup(EXIT_FAILURE);
+        }
     }
-    ckAmbigKernel = clCreateKernel(cpMLProgram, "AmbigKernel", &ciErr1);
-    //printf("clCreateKernel (AmbigKernel)...\n");
-    if (ciErr1 != CL_SUCCESS)
-    {
-        printf("Error in clCreateKernel, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
-        Cleanup(EXIT_FAILURE);
-    }
-    ckInternalKernel = clCreateKernel(cpMLProgram, "InternalKernel", &ciErr1);
-    //printf("clCreateKernel (InternalKernel)...\n");
-    if (ciErr1 != CL_SUCCESS)
-    {
-        printf("Error in clCreateKernel, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
-        Cleanup(EXIT_FAILURE);
-    }
-    ckResultKernel = clCreateKernel(cpMLProgram, "ResultKernel", &ciErr1);
-    //printf("clCreateKernel (ResultKernel)...\n");
-    if (ciErr1 != CL_SUCCESS)
-    {
-        printf("Error in clCreateKernel, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
-        Cleanup(EXIT_FAILURE);
-    }
-    ckReductionKernel = clCreateKernel(cpMLProgram, "ReductionKernel", &ciErr1);
-    //printf("clCreateKernel (ReductionKernel)...\n");
-    if (ciErr1 != CL_SUCCESS)
-    {
-        printf("Error in clCreateKernel, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
-        Cleanup(EXIT_FAILURE);
-    }
+
 #ifdef __VERBOSE__
+/*
     size_t maxKernelSize;
     ciErr1 = clGetKernelWorkGroupInfo(ckLeafKernel, cdDevice, CL_KERNEL_WORK_GROUP_SIZE,
                              sizeof(size_t), &maxKernelSize, NULL);
@@ -502,96 +639,13 @@ int _OCLEvaluator::setupContext(void)
     ciErr1 = clGetKernelWorkGroupInfo(ckReductionKernel, cdDevice, CL_KERNEL_WORK_GROUP_SIZE,
                              sizeof(size_t), &maxKernelSize, NULL);
     printf("Max Reduction Kernel Work Group Size: %ld \n", (long unsigned) maxKernelSize);
+*/
 #endif
 
-    long tempLeafState = 1;
-    long tempSiteCount = siteCount;
-    long tempCharCount = alphabetDimension;
-    long tempChildNodeIndex = 0;
-    long tempParentNodeIndex = 0;
-    long tempRoundCharCount = roundUpToNextPowerOfTwo(alphabetDimension);
-    int  tempTagIntState = 0;
-    int   tempNodeID = 0;
-    float tempScalar = scalar;
-    // this is currently ignored, 1 is hardcoded into the kernel code. 
-    float tempuFlowThresh = 0.000000001f;
-
-    ciErr1  = clSetKernelArg(ckLeafKernel, 0, sizeof(cl_mem), (void*)&cmNode_cache);
-    ciErr1 |= clSetKernelArg(ckLeafKernel, 1, sizeof(cl_mem), (void*)&cmModel_cache);
-    ciErr1 |= clSetKernelArg(ckLeafKernel, 2, sizeof(cl_mem), (void*)&cmNodRes_cache);
-    ciErr1 |= clSetKernelArg(ckLeafKernel, 3, sizeof(cl_mem), (void*)&cmNodFlag_cache);
-    ciErr1 |= clSetKernelArg(ckLeafKernel, 4, sizeof(cl_long), (void*)&tempSiteCount);
-    ciErr1 |= clSetKernelArg(ckLeafKernel, 5, sizeof(cl_long), (void*)&tempCharCount);
-    ciErr1 |= clSetKernelArg(ckLeafKernel, 6, sizeof(cl_long), (void*)&tempChildNodeIndex); // reset this in the loop
-    ciErr1 |= clSetKernelArg(ckLeafKernel, 7, sizeof(cl_long), (void*)&tempParentNodeIndex); // reset this in the loop
-    ciErr1 |= clSetKernelArg(ckLeafKernel, 8, sizeof(cl_long), (void*)&tempRoundCharCount);
-    ciErr1 |= clSetKernelArg(ckLeafKernel, 9, sizeof(cl_int), (void*)&tempTagIntState); // reset this in the loop
-    ciErr1 |= clSetKernelArg(ckLeafKernel, 10, sizeof(cl_int), (void*)&tempNodeID); // reset this in the loop
-    ciErr1 |= clSetKernelArg(ckLeafKernel, 11, sizeof(cl_mem), (void*)&cmScalings_cache);
-    ciErr1 |= clSetKernelArg(ckLeafKernel, 12, sizeof(cl_float), (void*)&tempScalar);
-    ciErr1 |= clSetKernelArg(ckLeafKernel, 13, sizeof(cl_float), (void*)&tempuFlowThresh);
-
-    ciErr1 |= clSetKernelArg(ckAmbigKernel, 0, sizeof(cl_mem), (void*)&cmNode_cache);
-    ciErr1 |= clSetKernelArg(ckAmbigKernel, 1, sizeof(cl_mem), (void*)&cmModel_cache);
-    ciErr1 |= clSetKernelArg(ckAmbigKernel, 2, sizeof(cl_mem), (void*)&cmNodRes_cache);
-    ciErr1 |= clSetKernelArg(ckAmbigKernel, 3, sizeof(cl_mem), (void*)&cmNodFlag_cache);
-    ciErr1 |= clSetKernelArg(ckAmbigKernel, 4, sizeof(cl_long), (void*)&tempSiteCount);
-    ciErr1 |= clSetKernelArg(ckAmbigKernel, 5, sizeof(cl_long), (void*)&tempCharCount);
-    ciErr1 |= clSetKernelArg(ckAmbigKernel, 6, sizeof(cl_long), (void*)&tempChildNodeIndex); // reset this in the loop
-    ciErr1 |= clSetKernelArg(ckAmbigKernel, 7, sizeof(cl_long), (void*)&tempParentNodeIndex); // reset this in the loop
-    ciErr1 |= clSetKernelArg(ckAmbigKernel, 8, sizeof(cl_long), (void*)&tempRoundCharCount);
-    ciErr1 |= clSetKernelArg(ckAmbigKernel, 9, sizeof(cl_int), (void*)&tempTagIntState);
-    ciErr1 |= clSetKernelArg(ckAmbigKernel, 10, sizeof(cl_int), (void*)&tempNodeID);
-    ciErr1 |= clSetKernelArg(ckAmbigKernel, 11, sizeof(cl_mem), (void*)&cmScalings_cache);
-    ciErr1 |= clSetKernelArg(ckAmbigKernel, 12, sizeof(cl_float), (void*)&tempScalar);
-    ciErr1 |= clSetKernelArg(ckAmbigKernel, 13, sizeof(cl_float), (void*)&tempuFlowThresh);
-
-    ciErr1 |= clSetKernelArg(ckInternalKernel, 0, sizeof(cl_mem), (void*)&cmNode_cache);
-    ciErr1 |= clSetKernelArg(ckInternalKernel, 1, sizeof(cl_mem), (void*)&cmModel_cache);
-    ciErr1 |= clSetKernelArg(ckInternalKernel, 2, sizeof(cl_mem), (void*)&cmNodRes_cache);
-    ciErr1 |= clSetKernelArg(ckInternalKernel, 3, sizeof(cl_long), (void*)&tempSiteCount);
-    ciErr1 |= clSetKernelArg(ckInternalKernel, 4, sizeof(cl_long), (void*)&tempCharCount);
-    ciErr1 |= clSetKernelArg(ckInternalKernel, 5, sizeof(cl_long), (void*)&tempChildNodeIndex); // reset this in the loop
-    ciErr1 |= clSetKernelArg(ckInternalKernel, 6, sizeof(cl_long), (void*)&tempParentNodeIndex); // reset this in the loop
-    ciErr1 |= clSetKernelArg(ckInternalKernel, 7, sizeof(cl_long), (void*)&tempRoundCharCount);
-    ciErr1 |= clSetKernelArg(ckInternalKernel, 8, sizeof(cl_int), (void*)&tempTagIntState); // reset this in the loop
-    ciErr1 |= clSetKernelArg(ckInternalKernel, 9, sizeof(cl_int), (void*)&tempNodeID); // reset this in the loop
-    ciErr1 |= clSetKernelArg(ckInternalKernel, 10, sizeof(cl_mem), (void*)&cmroot_cache);
-    ciErr1 |= clSetKernelArg(ckInternalKernel, 11, sizeof(cl_mem), (void*)&cmScalings_cache);
-    ciErr1 |= clSetKernelArg(ckInternalKernel, 12, sizeof(cl_float), (void*)&tempScalar);
-    ciErr1 |= clSetKernelArg(ckInternalKernel, 13, sizeof(cl_float), (void*)&tempuFlowThresh);
-    ciErr1 |= clSetKernelArg(ckInternalKernel, 14, sizeof(cl_mem), (void*)&cmroot_scalings);
-
-    ciErr1 |= clSetKernelArg(ckResultKernel, 0, sizeof(cl_mem), (void*)&cmFreq_cache);
-    ciErr1 |= clSetKernelArg(ckResultKernel, 1, sizeof(cl_mem), (void*)&cmProb_cache);
-    ciErr1 |= clSetKernelArg(ckResultKernel, 2, sizeof(cl_mem), (void*)&cmResult_cache);
-    ciErr1 |= clSetKernelArg(ckResultKernel, 3, sizeof(cl_mem), (void*)&cmroot_cache);
-    ciErr1 |= clSetKernelArg(ckResultKernel, 4, sizeof(cl_mem), (void*)&cmroot_scalings);
-    ciErr1 |= clSetKernelArg(ckResultKernel, 5, sizeof(cl_long), (void*)&tempSiteCount);
-    ciErr1 |= clSetKernelArg(ckResultKernel, 6, sizeof(cl_long), (void*)&tempRoundCharCount);
-    ciErr1 |= clSetKernelArg(ckResultKernel, 7, sizeof(cl_float), (void*)&tempScalar);
-    ciErr1 |= clSetKernelArg(ckResultKernel, 8, sizeof(cl_long), (void*)&tempCharCount);
-
-    ciErr1 |= clSetKernelArg(ckReductionKernel, 0, sizeof(cl_mem), (void*)&cmResult_cache);
-
-    //printf("clSetKernelArg 0 - 12...\n\n");
-    if (ciErr1 != CL_SUCCESS)
-    {
-        printf("Error in clSetKernelArg, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
-        Cleanup(EXIT_FAILURE);
-    }
 
     // --------------------------------------------------------
     // Start Core sequence... copy input data to GPU, compute, copy results back
     // Asynchronous write of data to GPU device
-    ciErr1 |= clEnqueueWriteBuffer(cqCommandQueue, cmFreq_cache, CL_FALSE, 0,
-                sizeof(cl_int)*siteCount, freq_cache, 0, NULL, NULL);
-    //printf("clEnqueueWriteBuffer (root_cache, etc.)...");
-    if (ciErr1 != CL_SUCCESS)
-    {
-        printf("Error in clEnqueueWriteBuffer, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
-        Cleanup(EXIT_FAILURE);
-    }
     //printf(" Done!\n");
 #ifdef __OCLPOSIX__
     clock_gettime(CLOCK_MONOTONIC, &setupEnd);
@@ -656,9 +710,14 @@ double _OCLEvaluator::oclmain(void)
 
     // enqueueing the read and write buffers takes 1/2 the time, the kernel takes the other 1/2.
     // with no queueing, however, we still only see ~700lf/s, which isn't much better than the threaded CPU code.
-    ciErr1 |= clEnqueueWriteBuffer(cqCommandQueue, cmModel_cache, CL_FALSE, 0,
-                sizeof(cl_float)*roundCharacters*roundCharacters*(flatParents.lLength-1),
-                model, 0, NULL, NULL);
+
+    for (int i = 0; i < ciDeviceCount; i++)
+    {
+        ciErr1 |= clEnqueueWriteBuffer(commandQueues[i], cmModel_cache, CL_FALSE, 0,
+                    sizeof(cl_float)*roundCharacters*roundCharacters*(flatParents.lLength-1),
+                    model, 0, NULL, NULL);
+    }
+
 #ifdef __OCLPOSIX__
     clock_gettime(CLOCK_MONOTONIC, &bufferEnd);
     buffSecs += (bufferEnd.tv_sec - bufferStart.tv_sec)+(bufferEnd.tv_nsec - bufferStart.tv_nsec)/BILLION;
@@ -717,37 +776,39 @@ double _OCLEvaluator::oclmain(void)
                         ambig = 1;
                         break;
                     }
-            if (!ambig)
+            for (int i = 0; i < ciDeviceCount; i++)
             {
-                ciErr1 |= clSetKernelArg(ckLeafKernel, 6, sizeof(cl_long), (void*)&nodeCodeTemp);
-                ciErr1 |= clSetKernelArg(ckLeafKernel, 7, sizeof(cl_long), (void*)&parentCode);
-                ciErr1 |= clSetKernelArg(ckLeafKernel, 9, sizeof(cl_int), (void*)&tempIntTagState);
-                ciErr1 |= clSetKernelArg(ckLeafKernel, 10, sizeof(cl_int), (void*)&nodeIndex);
-                taggedInternals.lData[parentCode] = 1;
+                if (!ambig)
+                {
+                    ciErr1 |= clSetKernelArg(ckLeafKernel[i], 6, sizeof(cl_long), (void*)&nodeCodeTemp);
+                    ciErr1 |= clSetKernelArg(ckLeafKernel[i], 7, sizeof(cl_long), (void*)&parentCode);
+                    ciErr1 |= clSetKernelArg(ckLeafKernel[i], 9, sizeof(cl_int), (void*)&tempIntTagState);
+                    ciErr1 |= clSetKernelArg(ckLeafKernel[i], 10, sizeof(cl_int), (void*)&nodeIndex);
 
-                //printf("Leaf!\n");
-#ifdef __VERBOSE__
-                printf("Leaf/Ambig Started (ParentCode: %i)...", parentCode);
-#endif
-                ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue, ckLeafKernel, 2, NULL,
-                                                szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
-            }
-            else
-            {
-                ciErr1 |= clSetKernelArg(ckAmbigKernel, 6, sizeof(cl_long), (void*)&nodeCodeTemp);
-                ciErr1 |= clSetKernelArg(ckAmbigKernel, 7, sizeof(cl_long), (void*)&parentCode);
-                ciErr1 |= clSetKernelArg(ckAmbigKernel, 9, sizeof(cl_int), (void*)&tempIntTagState);
-                ciErr1 |= clSetKernelArg(ckAmbigKernel, 10, sizeof(cl_int), (void*)&nodeIndex);
-                taggedInternals.lData[parentCode] = 1;
+                    //printf("Leaf!\n");
+    #ifdef __VERBOSE__
+                    printf("Leaf/Ambig Started (ParentCode: %i)...", parentCode);
+    #endif
+                    ciErr1 |= clEnqueueNDRangeKernel(commandQueues[i], ckLeafKernel[i], 2, NULL,
+                                                    szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
+                }
+                else
+                {
+                    ciErr1 |= clSetKernelArg(ckAmbigKernel[i], 6, sizeof(cl_long), (void*)&nodeCodeTemp);
+                    ciErr1 |= clSetKernelArg(ckAmbigKernel[i], 7, sizeof(cl_long), (void*)&parentCode);
+                    ciErr1 |= clSetKernelArg(ckAmbigKernel[i], 9, sizeof(cl_int), (void*)&tempIntTagState);
+                    ciErr1 |= clSetKernelArg(ckAmbigKernel[i], 10, sizeof(cl_int), (void*)&nodeIndex);
 
-                //printf("ambig!\n");
-#ifdef __VERBOSE__
-                printf("Leaf/Ambig Started ...");
-#endif
-                ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue, ckAmbigKernel, 2, NULL,
-                                                szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
+                    //printf("ambig!\n");
+    #ifdef __VERBOSE__
+                    printf("Leaf/Ambig Started ...");
+    #endif
+                    ciErr1 |= clEnqueueNDRangeKernel(commandQueues[i], ckAmbigKernel[i], 2, NULL,
+                                                    szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
+                }
+                ciErr1 |= clFlush(commandQueues[i]);
             }
-            ciErr1 |= clFlush(cqCommandQueue);
+            taggedInternals.lData[parentCode] = 1;
 #ifdef __VERBOSE__
             printf("Finished\n");
 #endif
@@ -758,19 +819,22 @@ double _OCLEvaluator::oclmain(void)
             nodeCode -= flatLeaves.lLength;
             long nodeCodeTemp = nodeCode;
             int tempIntTagState = taggedInternals.lData[parentCode];
-            ciErr1 |= clSetKernelArg(ckInternalKernel, 5, sizeof(cl_long), (void*)&nodeCodeTemp);
-            ciErr1 |= clSetKernelArg(ckInternalKernel, 6, sizeof(cl_long), (void*)&parentCode);
-            ciErr1 |= clSetKernelArg(ckInternalKernel, 8, sizeof(cl_int), (void*)&tempIntTagState);
-            ciErr1 |= clSetKernelArg(ckInternalKernel, 9, sizeof(cl_int), (void*)&nodeIndex);
-            taggedInternals.lData[parentCode] = 1;
-#ifdef __VERBOSE__
-            printf("Internal Started (ParentCode: %i)...", parentCode);
-#endif
-            ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue, ckInternalKernel, 2, NULL,
-                                            szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
+            for (int i = 0; i < ciDeviceCount; i++)
+            {
+                ciErr1 |= clSetKernelArg(ckInternalKernel[i], 5, sizeof(cl_long), (void*)&nodeCodeTemp);
+                ciErr1 |= clSetKernelArg(ckInternalKernel[i], 6, sizeof(cl_long), (void*)&parentCode);
+                ciErr1 |= clSetKernelArg(ckInternalKernel[i], 8, sizeof(cl_int), (void*)&tempIntTagState);
+                ciErr1 |= clSetKernelArg(ckInternalKernel[i], 9, sizeof(cl_int), (void*)&nodeIndex);
+    #ifdef __VERBOSE__
+                printf("Internal Started (ParentCode: %i)...", parentCode);
+    #endif
+                ciErr1 |= clEnqueueNDRangeKernel(commandQueues[i], ckInternalKernel[i], 2, NULL,
+                                                szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
 
-            //printf("internal!\n");
-            ciErr1 |= clFlush(cqCommandQueue);
+                //printf("internal!\n");
+                ciErr1 |= clFlush(commandQueues[i]);
+            }
+            taggedInternals.lData[parentCode] = 1;
 #ifdef __VERBOSE__
             printf("Finished\n");
 #endif
@@ -801,17 +865,21 @@ double _OCLEvaluator::oclmain(void)
             Cleanup(EXIT_FAILURE);
         }
     }
-#ifdef __GPUResults__
-	size_t szGlobalWorkSize2 = 256;
-	size_t szLocalWorkSize2 = 256;
-    ciErr1 |= clEnqueueNDRangeKernel(cqCommandQueue, ckResultKernel, 1, NULL,
-        &szGlobalWorkSize2, &szLocalWorkSize2, 0, NULL, NULL);
-    ciErr1 |= clEnqueueNDRangeKernel(cqCommandQueue, ckReductionKernel, 1, NULL,
-        &szGlobalWorkSize2, &szLocalWorkSize2, 0, NULL, NULL);
-#else
-    ciErr1 |= clEnqueueNDRangeKernel(cqCommandQueue, ckResultKernel, 2, NULL,
-        szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
-#endif
+
+    for (int i = 0; i < ciDeviceCount; i++)
+    {
+        #ifdef __GPUResults__
+            size_t szGlobalWorkSize2 = 256;
+            size_t szLocalWorkSize2 = 256;
+            ciErr1 |= clEnqueueNDRangeKernel(commandQueues[i], ckResultKernel, 1, NULL,
+                &szGlobalWorkSize2, &szLocalWorkSize2, 0, NULL, NULL);
+            ciErr1 |= clEnqueueNDRangeKernel(commandQueues[i], ckReductionKernel, 1, NULL,
+                &szGlobalWorkSize2, &szLocalWorkSize2, 0, NULL, NULL);
+        #else
+            ciErr1 |= clEnqueueNDRangeKernel(commandQueues[i], ckResultKernel[i], 2, NULL,
+                szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
+        #endif
+    }
     if (ciErr1 != CL_SUCCESS)
     {
         printf("%i\n", ciErr1); //prints "1"
@@ -838,13 +906,15 @@ double _OCLEvaluator::oclmain(void)
         printf("Error in clEnqueueNDRangeKernel, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
         Cleanup(EXIT_FAILURE);
     }
-    clFinish(cqCommandQueue);
+
+    for (int i = 0; i < ciDeviceCount; i++)
+        clFinish(commandQueues[i]);
     // Synchronous/blocking read of results, and check accumulated errors
 #ifdef __GPUResults_
     //ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
      //       sizeof(cl_double)*roundUpToNextPowerOfTwo(siteCount), result_cache, 0,
       //      NULL, NULL);
-    ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALE, 0,
+    ciErr1 = clEnqueueReadBuffer(commandQueues[0], cmResult_cache, CL_FALSE, 0,
             sizeof(clfp), result_cache, 0,
             NULL, NULL);
     //ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
@@ -860,7 +930,7 @@ double _OCLEvaluator::oclmain(void)
     //ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
     //        sizeof(clfp)*roundUpToNextPowerOfTwo(siteCount), result_cache, 0,
      //       NULL, NULL);
-    ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_TRUE, 0,
+    ciErr1 = clEnqueueReadBuffer(commandQueues[0], cmResult_cache, CL_TRUE, 0,
             sizeof(clfp)*siteCount, result_cache, 0,
             NULL, NULL);
 #endif
@@ -892,7 +962,8 @@ double _OCLEvaluator::oclmain(void)
     //--------------------------------------------------------
 
 
-    clFinish(cqCommandQueue);
+    for (int i = 0; i < ciDeviceCount; i++)
+        clFinish(commandQueues[i]);
     double oResult = 0.0;
 
 #ifdef __OCLPOSIX__
@@ -1026,17 +1097,21 @@ void _OCLEvaluator::Cleanup (int iExitCode)
         printf("Time in Setup: %.4lf seconds\n", setupSecs);
         // Cleanup allocated objects
         printf("Starting Cleanup...\n\n");
-        if(ckLeafKernel)clReleaseKernel(ckLeafKernel);
-        if(ckInternalKernel)clReleaseKernel(ckInternalKernel);
-        if(ckAmbigKernel)clReleaseKernel(ckAmbigKernel);
-        if(ckResultKernel)clReleaseKernel(ckResultKernel);
-        if(ckReductionKernel)clReleaseKernel(ckReductionKernel);
         //if(cpLeafProgram)clReleaseProgram(cpLeafProgram);
         //if(cpInternalProgram)clReleaseProgram(cpInternalProgram);
         //if(cpAmbigProgram)clReleaseProgram(cpAmbigProgram);
         //if(cpResultProgram)clReleaseProgram(cpResultProgram);
         if(cpMLProgram)clReleaseProgram(cpMLProgram);
         if(cqCommandQueue)clReleaseCommandQueue(cqCommandQueue);
+        for (int i = 0; i < ciDeviceCount; i++)
+        {
+            if(ckLeafKernel[i])clReleaseKernel(ckLeafKernel[i]);
+            if(ckInternalKernel[i])clReleaseKernel(ckInternalKernel[i]);
+            if(ckAmbigKernel[i])clReleaseKernel(ckAmbigKernel[i]);
+            if(ckResultKernel[i])clReleaseKernel(ckResultKernel[i]);
+            if(ckReductionKernel[i])clReleaseKernel(ckReductionKernel[i]);
+            if(commandQueues[i])clReleaseCommandQueue(commandQueues[i]);
+        }
         printf("Halfway...\n\n");
         if(cxGPUContext)clReleaseContext(cxGPUContext);
 
