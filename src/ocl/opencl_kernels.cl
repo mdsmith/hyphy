@@ -232,7 +232,9 @@ __kernel void ResultKernel (   __global int* freq_cache,                   // ar
    }
    // TODO: this would probably be faster if I saved them further apart to reduce bank conflicts
    if (localSite == 0) result_cache[get_group_id(0)] = resultScratch[0];
+
    #else
+
    if (get_global_id(0) != 0) return;
    int site = get_global_id(1);
    result_cache[site] = 0.0;
@@ -246,6 +248,7 @@ __kernel void ResultKernel (   __global int* freq_cache,                   // ar
            acc += root_cache[site*roundCharacters + rChar] * prob_cache[rChar];
        }
        result_cache[site] += (native_log(acc)-scale*native_log(scalar)) * freq_cache[site];
+
        //site += get_local_size(0)*get_local_size(1);
    //}
    //barrier(CLK_LOCAL_MEM_FENCE);

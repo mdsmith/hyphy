@@ -64,6 +64,8 @@ private:
 	double oclmain(void);
 	bool contextSet;
 	int setupContext(void);
+    int nextMulSixteen(int x);
+    int nextMul(int x, int y);
 
 
 public:
