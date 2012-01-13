@@ -192,7 +192,7 @@ int _OCLEvaluator::setupContext(void)
     {
         printf("Could not get number of devices");
     }
-    ciDeviceCount = 4;
+    //ciDeviceCount = 1;
     cdDevices = (cl_device_id *)malloc(ciDeviceCount * sizeof(cl_device_id));
     ciErr1 = clGetDeviceIDs(cpPlatform, CL_DEVICE_TYPE_GPU, ciDeviceCount, cdDevices, NULL);
     if (ciErr1 != CL_SUCCESS)
@@ -744,6 +744,14 @@ double _OCLEvaluator::oclmain(void)
         }
     }
 
+#ifdef __OCLPOSIX__
+    clock_gettime(CLOCK_MONOTONIC, &bufferEnd);
+    buffSecs += (bufferEnd.tv_sec - bufferStart.tv_sec)+(bufferEnd.tv_nsec - bufferStart.tv_nsec)/BILLION;
+#endif
+
+#ifdef __OCLPOSIX__
+    clock_gettime(CLOCK_MONOTONIC, &queueStart);
+#endif
     for (int i = 0; i < ciDeviceCount; i++)
     {
         ciErr1 |= clEnqueueWriteBuffer(commandQueues[i], cmModel_cache, CL_FALSE, 0,
@@ -752,12 +760,6 @@ double _OCLEvaluator::oclmain(void)
     }
 
 
-#ifdef __OCLPOSIX__
-    clock_gettime(CLOCK_MONOTONIC, &bufferEnd);
-    buffSecs += (bufferEnd.tv_sec - bufferStart.tv_sec)+(bufferEnd.tv_nsec - bufferStart.tv_nsec)/BILLION;
-
-    clock_gettime(CLOCK_MONOTONIC, &queueStart);
-#endif
     if (ciErr1 != CL_SUCCESS)
     {
         printf("%i\n", ciErr1); //prints "1"
@@ -785,9 +787,6 @@ double _OCLEvaluator::oclmain(void)
         Cleanup(EXIT_FAILURE);
     }
     */
-#ifdef __OCLPOSIX__
-    clock_gettime(CLOCK_MONOTONIC, &queueStart);
-#endif
     //printf("Finished writing the model stuff\n");
     // Launch kernels
     for (int nodeIndex = 0; nodeIndex < updateNodes.lLength; nodeIndex++)
@@ -1115,8 +1114,15 @@ double _OCLEvaluator::launchmdsocl( _SimpleList& eupdateNodes,
     theFrequencies = etheFrequencies;
 
 
+#ifdef __OCLPOSIX__
+    clock_gettime(CLOCK_MONOTONIC, &mainEnd);
+    mainSecs += (mainEnd.tv_sec - mainStart.tv_sec)+(mainEnd.tv_nsec - mainStart.tv_nsec)/BILLION;
+#endif
     if (!contextSet)
     {
+#ifdef __OCLPOSIX__
+    clock_gettime(CLOCK_MONOTONIC, &mainStart);
+#endif
         theProbs = etheProbs;
         flatNodes = eflatNodes;
         flatCLeaves = eflatCLeaves;
@@ -1125,14 +1131,14 @@ double _OCLEvaluator::launchmdsocl( _SimpleList& eupdateNodes,
         flatParents = eflatParents;
         lNodeFlags = elNodeFlags;
         lNodeResolutions = elNodeResolutions;
-        setupContext();
-        contextSet = true;
-    }
-
 #ifdef __OCLPOSIX__
     clock_gettime(CLOCK_MONOTONIC, &mainEnd);
     mainSecs += (mainEnd.tv_sec - mainStart.tv_sec)+(mainEnd.tv_nsec - mainStart.tv_nsec)/BILLION;
 #endif
+        setupContext();
+        contextSet = true;
+    }
+
 
     return oclmain();
 }
