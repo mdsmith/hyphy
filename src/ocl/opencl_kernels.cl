@@ -130,11 +130,9 @@ __kernel void InternalKernel(  __global float* node_cache,                 // ar
                                long roundCharacters,                       // argument 7
                                int intTagState,                            // argument 8
                                int nodeID,                                 // argument 9
-                               __global float* root_cache,                 // argument 10
-                               __global int* scalings,                     // argument 11
-                               float scalar,                               // argument 12
-                               float uFlowThresh,                          // argument 13
-                               __global int* root_scalings                 // argument 10
+                               __global int* scalings,                     // argument 10
+                               float scalar,                               // argument 11
+                               float uFlowThresh                           // argument 12
                                )
 {
    // thread index
@@ -184,19 +182,18 @@ __kernel void InternalKernel(  __global float* node_cache,                 // ar
    {
        scalings     [parentCharacterIndex]  = scale;
        node_cache   [parentCharacterIndex]  = privateParentScratch;
-       root_cache   [gy*roundCharacters+gx] = privateParentScratch;
-       root_scalings[gy*roundCharacters+gx] = scale;
    }
 }
 __kernel void ResultKernel (   __global int* freq_cache,                   // argument 0
                                __global float* prob_cache,                 // argument 1
                                __global fpoint* result_cache,              // argument 2
-                               __global float* root_cache,                 // argument 3
-                               __global int* root_scalings,                // argument 4
+                               __global float* node_cache,                 // argument 3
+                               __global int* scalings,                // argument 4
                                long sites,                                 // argument 5
                                long roundCharacters,                       // argument 6
                                float scalar,                               // argument 7
-                               long characters                             // argument 8
+                               long characters,                             // argument 8
+                                int rootNodeIndex
                            )
 {
    // shrink the work group to sites, rather than sites x characters
@@ -209,10 +206,10 @@ __kernel void ResultKernel (   __global int* freq_cache,                   // ar
    {
        result_cache[site] = 0.0;
        fpoint acc = 0.0;
-       int scale = root_scalings[site*roundCharacters];
+       int scale = scalings[rootNodeIndex * sites*roundCharacters + site*roundCharacters];
        for (int rChar = 0; rChar < characters; rChar++)
        {
-           acc += root_cache[site*roundCharacters + rChar] * prob_cache[rChar];
+           acc += node_cache[rootNodeIndex*sites*roundCharacters + site*roundCharacters + rChar] * prob_cache[rChar];
        }
        //resultScratch[localSite] += (native_log(acc)-scale*native_log(scalar)) * freq_cache[site];
        resultScratch[localSite] += (log(acc)-scale*log(scalar)) * freq_cache[site];
@@ -242,10 +239,10 @@ __kernel void ResultKernel (   __global int* freq_cache,                   // ar
    //while (site < sites)
    //{
        float acc = 0.0;
-       int scale = root_scalings[site*roundCharacters];
+       int scale = scalings[rootNodeIndex*sites*roundCharacters + site*roundCharacters];
        for (int rChar = 0; rChar < characters; rChar++)
        {
-           acc += root_cache[site*roundCharacters + rChar] * prob_cache[rChar];
+           acc += node_cache[rootNodeIndex*sites*roundCharacters + site*roundCharacters + rChar] * prob_cache[rChar];
        }
        result_cache[site] += (native_log(acc)-scale*native_log(scalar)) * freq_cache[site];
 

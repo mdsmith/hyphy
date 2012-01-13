@@ -142,7 +142,7 @@ _GrowingVector* lNodeResolutions;
 float scalar;
 int sitesPerGPU;
 
-void *node_cache, *nodRes_cache, **nodFlag_cache, *scalings_cache, *prob_cache, *freq_cache, *root_cache, *result_cache, *root_scalings, *model;
+void *node_cache, *nodRes_cache, **nodFlag_cache, *scalings_cache, *prob_cache, *freq_cache, *result_cache, *model;
 
 void _OCLEvaluator::init(   long esiteCount,
                                     long ealphabetDimension,
@@ -192,7 +192,7 @@ int _OCLEvaluator::setupContext(void)
     {
         printf("Could not get number of devices");
     }
-    //ciDeviceCount = 1;
+    ciDeviceCount = 4;
     cdDevices = (cl_device_id *)malloc(ciDeviceCount * sizeof(cl_device_id));
     ciErr1 = clGetDeviceIDs(cpPlatform, CL_DEVICE_TYPE_GPU, ciDeviceCount, cdDevices, NULL);
     if (ciErr1 != CL_SUCCESS)
@@ -386,12 +386,6 @@ int _OCLEvaluator::setupContext(void)
     cmNodFlag_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_ONLY,
                     sizeof(cl_long)*(flatLeaves.lLength * roundSiteCount/ciDeviceCount), NULL, &ciErr2);
     ciErr1 |= ciErr2;
-    cmroot_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_WRITE,
-                    sizeof(cl_float)*(roundSiteCount/ciDeviceCount)*roundCharacters, NULL, &ciErr2);
-    ciErr1 |= ciErr2;
-    cmroot_scalings = clCreateBuffer(cxGPUContext, CL_MEM_READ_WRITE,
-                    sizeof(cl_int)*(roundSiteCount/ciDeviceCount)*roundCharacters, NULL, &ciErr2);
-    ciErr1 |= ciErr2;
     cmProb_cache = clCreateBuffer(cxGPUContext, CL_MEM_READ_ONLY,
                     sizeof(cl_float)*roundCharacters, NULL, &ciErr2);
     ciErr1 |= ciErr2;
@@ -558,6 +552,9 @@ int _OCLEvaluator::setupContext(void)
         // this is currently ignored, 1 is hardcoded into the kernel code. 
         float tempuFlowThresh = 0.000000001f;
 
+        int nodeCode = updateNodes.lData[updateNodes.lLength - 1];
+        int rootCode = flatParents.lData[nodeCode];
+
         ciErr1  = clSetKernelArg(ckLeafKernel[i], 0, sizeof(cl_mem), (void*)&cmNode_cache);
         ciErr1 |= clSetKernelArg(ckLeafKernel[i], 1, sizeof(cl_mem), (void*)&cmModel_cache);
         ciErr1 |= clSetKernelArg(ckLeafKernel[i], 2, sizeof(cl_mem), (void*)&cmNodRes_cache);
@@ -598,21 +595,20 @@ int _OCLEvaluator::setupContext(void)
         ciErr1 |= clSetKernelArg(ckInternalKernel[i], 7, sizeof(cl_long), (void*)&tempRoundCharCount);
         ciErr1 |= clSetKernelArg(ckInternalKernel[i], 8, sizeof(cl_int), (void*)&tempTagIntState); // reset this in the loop
         ciErr1 |= clSetKernelArg(ckInternalKernel[i], 9, sizeof(cl_int), (void*)&tempNodeID); // reset this in the loop
-        ciErr1 |= clSetKernelArg(ckInternalKernel[i], 10, sizeof(cl_mem), (void*)&cmroot_cache);
-        ciErr1 |= clSetKernelArg(ckInternalKernel[i], 11, sizeof(cl_mem), (void*)&cmScalings_cache);
-        ciErr1 |= clSetKernelArg(ckInternalKernel[i], 12, sizeof(cl_float), (void*)&tempScalar);
-        ciErr1 |= clSetKernelArg(ckInternalKernel[i], 13, sizeof(cl_float), (void*)&tempuFlowThresh);
-        ciErr1 |= clSetKernelArg(ckInternalKernel[i], 14, sizeof(cl_mem), (void*)&cmroot_scalings);
+        ciErr1 |= clSetKernelArg(ckInternalKernel[i], 10, sizeof(cl_mem), (void*)&cmScalings_cache);
+        ciErr1 |= clSetKernelArg(ckInternalKernel[i], 11, sizeof(cl_float), (void*)&tempScalar);
+        ciErr1 |= clSetKernelArg(ckInternalKernel[i], 12, sizeof(cl_float), (void*)&tempuFlowThresh);
 
         ciErr1 |= clSetKernelArg(ckResultKernel[i], 0, sizeof(cl_mem), (void*)&cmFreq_cache);
         ciErr1 |= clSetKernelArg(ckResultKernel[i], 1, sizeof(cl_mem), (void*)&cmProb_cache);
         ciErr1 |= clSetKernelArg(ckResultKernel[i], 2, sizeof(cl_mem), (void*)&cmResult_cache);
-        ciErr1 |= clSetKernelArg(ckResultKernel[i], 3, sizeof(cl_mem), (void*)&cmroot_cache);
-        ciErr1 |= clSetKernelArg(ckResultKernel[i], 4, sizeof(cl_mem), (void*)&cmroot_scalings);
+        ciErr1 |= clSetKernelArg(ckResultKernel[i], 3, sizeof(cl_mem), (void*)&cmNode_cache);
+        ciErr1 |= clSetKernelArg(ckResultKernel[i], 4, sizeof(cl_mem), (void*)&cmScalings_cache);
         ciErr1 |= clSetKernelArg(ckResultKernel[i], 5, sizeof(cl_long), (void*)&tempSiteCount);
         ciErr1 |= clSetKernelArg(ckResultKernel[i], 6, sizeof(cl_long), (void*)&tempRoundCharCount);
         ciErr1 |= clSetKernelArg(ckResultKernel[i], 7, sizeof(cl_float), (void*)&tempScalar);
         ciErr1 |= clSetKernelArg(ckResultKernel[i], 8, sizeof(cl_long), (void*)&tempCharCount);
+        ciErr1 |= clSetKernelArg(ckResultKernel[i], 9, sizeof(cl_int), (void*)&rootCode);
 
         ciErr1 |= clSetKernelArg(ckReductionKernel[i], 0, sizeof(cl_mem), (void*)&cmResult_cache);
 
@@ -1212,9 +1208,7 @@ void _OCLEvaluator::Cleanup (int iExitCode)
         free(scalings_cache);
         free(prob_cache);
         free(freq_cache);
-        free(root_cache);
         free(result_cache);
-        free(root_scalings);
         printf("Done!\n\n");
         clean = true;
         exit(0);
