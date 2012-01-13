@@ -713,6 +713,19 @@ double _OCLEvaluator::oclmain(void)
     //#pragma omp parallel for default(none) shared(updateNodes, flatParents, flatLeaves, flatCLeaves, flatTree, alphabetDimension, model, roundCharacters) private(nodeCode, parentCode, isLeaf, tMatrix, a1, a2)
 
     // rebuild the model cache and move it over to the GPU
+
+//  For time experimentation:
+
+/*
+    for (int i = 0; i < ciDeviceCount; i++)
+    {
+        ciErr1 |= clEnqueueWriteBuffer(commandQueues[i], cmModel_cache, CL_FALSE, 0,
+                    sizeof(cl_float)*roundCharacters*roundCharacters*(flatParents.lLength-1),
+                    model, 0, NULL, NULL);
+    }
+*/
+    
+
     for (int nodeID = 0; nodeID < updateNodes.lLength; nodeID++)
     {
         nodeCode = updateNodes.lData[nodeID];
@@ -1000,8 +1013,8 @@ double _OCLEvaluator::oclmain(void)
     //--------------------------------------------------------
 
 
-    for (int i = 0; i < ciDeviceCount; i++)
-        clFinish(commandQueues[i]);
+    //for (int i = 0; i < ciDeviceCount; i++)
+        //clFinish(commandQueues[i]);
     double oResult = 0.0;
 
 #ifdef __OCLPOSIX__

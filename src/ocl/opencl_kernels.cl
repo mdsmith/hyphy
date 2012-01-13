@@ -183,9 +183,9 @@ __kernel void InternalKernel(  __global float* node_cache,                 // ar
    if (gy < sites && gx < characters)
    {
        scalings     [parentCharacterIndex]  = scale;
-       root_scalings[gy*roundCharacters+gx] = scale;
        node_cache   [parentCharacterIndex]  = privateParentScratch;
        root_cache   [gy*roundCharacters+gx] = privateParentScratch;
+       root_scalings[gy*roundCharacters+gx] = scale;
    }
 }
 __kernel void ResultKernel (   __global int* freq_cache,                   // argument 0
