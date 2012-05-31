@@ -295,8 +295,8 @@ int _OCLEvaluator::setupContext(void)
     szLocalWorkSize[1] = 1;
 #endif
 */
-    szLocalWorkSize = maxWorkGroupSize;
     szGlobalWorkSize = ((siteCount + 16)/16)*16*roundCharacters;
+    szLocalWorkSize = MIN(MAX((maxWorkGroupSize/roundCharacters)*roundCharacters,1), szGlobalWorkSize);
     printf("Global Work Size \t\t= %ld\nLocal Work Size \t\t= %ld\n# of Work Groups \t\t= %ld\n\n",
            (long unsigned) szGlobalWorkSize,
            (long unsigned) szLocalWorkSize,
@@ -751,7 +751,7 @@ double _OCLEvaluator::oclmain(void)
                 printf("Leaf/Ambig Started (ParentCode: %i)...", parentCode);
 #endif
                 ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue, ckLeafKernel, 1, NULL,
-                                                szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
+                                                &szGlobalWorkSize, &szLocalWorkSize, 0, NULL, NULL);
             }
             else
             {
@@ -766,7 +766,7 @@ double _OCLEvaluator::oclmain(void)
                 printf("Leaf/Ambig Started ...");
 #endif
                 ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue, ckAmbigKernel, 1, NULL,
-                                                szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
+                                               &szGlobalWorkSize, &szLocalWorkSize, 0, NULL, NULL);
             }
             ciErr1 |= clFlush(cqCommandQueue);
 #ifdef __VERBOSE__
@@ -788,7 +788,7 @@ double _OCLEvaluator::oclmain(void)
             printf("Internal Started (ParentCode: %i)...", parentCode);
 #endif
             ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue, ckInternalKernel, 1, NULL,
-                                            szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
+                                            &szGlobalWorkSize, &szLocalWorkSize, 0, NULL, NULL);
 
             //printf("internal!\n");
             ciErr1 |= clFlush(cqCommandQueue);
@@ -830,8 +830,8 @@ double _OCLEvaluator::oclmain(void)
     ciErr1 |= clEnqueueNDRangeKernel(cqCommandQueue, ckReductionKernel, 1, NULL,
         &szGlobalWorkSize2, &szLocalWorkSize2, 0, NULL, NULL);
 #else
-    ciErr1 |= clEnqueueNDRangeKernel(cqCommandQueue, ckResultKernel, 2, NULL,
-        szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
+    ciErr1 |= clEnqueueNDRangeKernel(cqCommandQueue, ckResultKernel, 1, NULL,
+        &szGlobalWorkSize, &szLocalWorkSize, 0, NULL, NULL);
 #endif
     if (ciErr1 != CL_SUCCESS)
     {

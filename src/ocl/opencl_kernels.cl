@@ -54,6 +54,7 @@ __kernel void AmbigKernel(   __global float* node_cache,                  // arg
 {
     // thread index
     int tx = get_local_id(0);
+    /*
     int ty = get_local_id(1);
     // global index
     int gx = get_global_id(0);
@@ -117,7 +118,6 @@ __kernel void AmbigKernel(   __global float* node_cache,                  // arg
         scalings    [parentCharacterIndex]  = scale;
         node_cache  [parentCharacterIndex]  = privateParentScratch;
     }
-    /*
     */
 }
 __kernel void InternalKernel(  __global float* node_cache,              // argument 0
@@ -138,17 +138,16 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
                          )
 {
     // Get thread specific junk going (where it is in the parent cache)
-    // thread index
-    short tx = get_local_id(0);    //local pchar
-    short ty = get_local_id(1);    //local site
-    // global index
-    short gx = get_global_id(0); // global pchar
-    int gy = get_global_id(1); // site
+    short tx = get_local_id(0);    
+    int pchar = tx % roundCharacters;
+    short gx = get_global_id(0);   
+    int site = gx / roundCharacters;
+    int localSite = tx / roundCharacters;
     // Cache that parent character value!
-    long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gy*roundCharacters + gx;
+    long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gx;
     float privateParentScratch = 1.0f;
     short scale = 0;
-    if (intTagState == 1 && gy < sites && gx < characters)
+    if (intTagState == 1 && site < sites && pchar < characters)
     {
         privateParentScratch = node_cache[parentCharacterIndex];
         scale = scalings[parentCharacterIndex];
@@ -156,6 +155,29 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
     
     // Now lets start the matrix multiplication
 
+    // TODO Pass in scratch size, so I can cache more if possible. 16kb min??
+    //__local float modelScratch[64][64];
+
+    float sum = 0.0;
+    for (int i = 0; i < roundCharacters; i++)
+    {
+        float childValue = node_cache[childNodeIndex*sites*roundCharacters + site + i];
+        float modelValue = model[nodeID*roundCharacters*roundCharacters + roundCharacters * pchar + i];
+        sum += childValue * modelValue;
+    }
+    if (site < sites && pchar < characters)
+    {
+        privateParentScratch *= sum;
+        node_cache[parentCharacterIndex] = privateParentScratch;
+        root_cache[site + pchar] = privateParentScratch;
+    }
+/*
+        
+*/
+    
+
+
+/*
     // Shared cache chunk sizes:
     int childCharacters = 64; // 64 regardless of local size as every parent character relies on every child character
     int childSites = get_local_size(1); // this one varies depending on the number of sites. More sites *= number of child characters
@@ -179,15 +201,10 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
     {
 
     }
+*/
 
 
-
-
-
-
-
-
-
+/*
     short cChar = 0;
     for (int charBlock = 0; charBlock < 64/BLOCK_SIZE; charBlock++)
     {
@@ -211,6 +228,9 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
         scaleScratch++;
     }
     scale += scaleScratch;
+*/
+
+/*
     privateParentScratch *= sum;
     if (gy < sites && gx < characters)
     {
@@ -219,6 +239,7 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
         node_cache    [parentCharacterIndex]  = privateParentScratch;
         root_cache    [gy*roundCharacters+gx] = privateParentScratch;
     }
+*/
 }
 __kernel void ResultKernel (    __global int* freq_cache,                   // argument 0
                                  __global float* prob_cache,                  // argument 1
@@ -265,8 +286,9 @@ __kernel void ResultKernel (    __global int* freq_cache,                   // a
     // TODO: this would probably be faster if I saved them further apart to reduce bank conflicts
     if (localSite == 0) result_cache[get_group_id(0)] = resultScratch[0];
     #else
-    if (get_global_id(0) != 0) return;
-    int site = get_global_id(1);
+    int pchar = get_local_id(0) % roundCharacters;
+    int site = get_local_id(0) / roundCharacters;
+    if (pchar != 0) return;
     result_cache[site] = 0.0;
     //if (get_group_id(1) >= get_local_size(0)*get_local_size(1)) return;
     //while (site < sites)
