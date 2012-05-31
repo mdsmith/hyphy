@@ -101,8 +101,8 @@ cl_kernel ckInternalKernel;
 cl_kernel ckAmbigKernel;
 cl_kernel ckResultKernel;
 cl_kernel ckReductionKernel;
-size_t szGlobalWorkSize[2];        // 1D var for Total # of work items
-size_t szLocalWorkSize[2];         // 1D var for # of work items in the work group
+size_t szGlobalWorkSize;        // 1D var for Total # of work items
+size_t szLocalWorkSize;         // 1D var for # of work items in the work group
 size_t localMemorySize;         // size of local memory buffer for kernel scratch
 size_t szParmDataBytes;         // Byte size of context information
 size_t szKernelLength;          // Byte size of kernel code
@@ -264,6 +264,7 @@ int _OCLEvaluator::setupContext(void)
 
     printf("sites: %ld\n", siteCount);
 
+/*
     // max number of sites that can be addressed in one work group based on shared memory size 
     childCacheMemAllotment = (maxLocalSize - roundCharacters*roundCharacters*2)/4; // two for half the shared cache, four for bytes -> ints
     childCacheMemAllotment /= 64;
@@ -283,6 +284,7 @@ int _OCLEvaluator::setupContext(void)
         szLocalWorkSize[0] = 64;
         szLocalWorkSize[1] = MIN(maxWorkGroupSize/64, childCacheMemAllotment);
     }
+*/
 
 /*
 #ifdef OCLGPU
@@ -293,16 +295,12 @@ int _OCLEvaluator::setupContext(void)
     szLocalWorkSize[1] = 1;
 #endif
 */
-
-    szGlobalWorkSize[0] = 64;
-    szGlobalWorkSize[1] = ((siteCount + 16)/16)*16;
-    //szGlobalWorkSize[1] = roundUpToNextPowerOfTwo(siteCount);
-    printf("Global Work Size \t\t= %ld, %ld\nLocal Work Size \t\t= %ld, %ld\n# of Work Groups \t\t= %ld\n\n",
-           (long unsigned) szGlobalWorkSize[0],
-           (long unsigned) szGlobalWorkSize[1],
-           (long unsigned) szLocalWorkSize[0],
-           (long unsigned) szLocalWorkSize[1],
-           (long unsigned) ((szGlobalWorkSize[0]*szGlobalWorkSize[1])/(szLocalWorkSize[0]*szLocalWorkSize[1])));
+    szLocalWorkSize = maxWorkGroupSize;
+    szGlobalWorkSize = ((siteCount + 16)/16)*16*roundCharacters;
+    printf("Global Work Size \t\t= %ld\nLocal Work Size \t\t= %ld\n# of Work Groups \t\t= %ld\n\n",
+           (long unsigned) szGlobalWorkSize,
+           (long unsigned) szLocalWorkSize,
+           (long unsigned) ((szGlobalWorkSize)/(szLocalWorkSize)));
 
 
     size_t returned_size = 0;
@@ -752,7 +750,7 @@ double _OCLEvaluator::oclmain(void)
 #ifdef __VERBOSE__
                 printf("Leaf/Ambig Started (ParentCode: %i)...", parentCode);
 #endif
-                ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue, ckLeafKernel, 2, NULL,
+                ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue, ckLeafKernel, 1, NULL,
                                                 szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
             }
             else
@@ -767,7 +765,7 @@ double _OCLEvaluator::oclmain(void)
 #ifdef __VERBOSE__
                 printf("Leaf/Ambig Started ...");
 #endif
-                ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue, ckAmbigKernel, 2, NULL,
+                ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue, ckAmbigKernel, 1, NULL,
                                                 szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
             }
             ciErr1 |= clFlush(cqCommandQueue);
@@ -789,7 +787,7 @@ double _OCLEvaluator::oclmain(void)
 #ifdef __VERBOSE__
             printf("Internal Started (ParentCode: %i)...", parentCode);
 #endif
-            ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue, ckInternalKernel, 2, NULL,
+            ciErr1 = clEnqueueNDRangeKernel(cqCommandQueue, ckInternalKernel, 1, NULL,
                                             szGlobalWorkSize, szLocalWorkSize, 0, NULL, NULL);
 
             //printf("internal!\n");
