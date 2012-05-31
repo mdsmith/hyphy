@@ -264,8 +264,27 @@ int _OCLEvaluator::setupContext(void)
 
     printf("sites: %ld\n", siteCount);
 
+    // max number of sites that can be addressed in one work group based on shared memory size 
+    childCacheMemAllotment = (maxLocalSize - roundCharacters*roundCharacters*2)/4; // two for half the shared cache, four for bytes -> ints
+    childCacheMemAllotment /= 64;
+    
+    printf("Child site allotment per work group: %d\n sites", childCacheMemAllotment);
+
     // set and log Global and Local work size dimensions
 
+
+    if (maxWorkGroupSize < 64):
+    {
+        szLocalWorkSize[0] = 1;
+        szLocalWorkSize[1] = 1;
+    }
+    else 
+    {   
+        szLocalWorkSize[0] = 64;
+        szLocalWorkSize[1] = MIN(maxWorkGroupSize/64, childCacheMemAllotment);
+    }
+
+/*
 #ifdef OCLGPU
     szLocalWorkSize[0] = 16; // All of these will have to be generalized.
     szLocalWorkSize[1] = 16;
@@ -273,6 +292,8 @@ int _OCLEvaluator::setupContext(void)
     szLocalWorkSize[0] = 1; // All of these will have to be generalized.
     szLocalWorkSize[1] = 1;
 #endif
+*/
+
     szGlobalWorkSize[0] = 64;
     szGlobalWorkSize[1] = ((siteCount + 16)/16)*16;
     //szGlobalWorkSize[1] = roundUpToNextPowerOfTwo(siteCount);
@@ -312,6 +333,8 @@ int _OCLEvaluator::setupContext(void)
         Cleanup(EXIT_FAILURE);
     }
 
+
+    // TODO: might have to reorg model cache to be block all the cc's in a pc together
 
     //printf("Setup all of the OpenCL stuff!\n");
 
