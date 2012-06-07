@@ -16,8 +16,10 @@ __kernel void LeafKernel(  __global float* node_cache,                // argumen
                              )
 {
     int gx = get_global_id(0); // pchar
+    gx = get_global_id(0) % roundCharacters;
     if (gx > characters) return;
     int gy = get_global_id(1); // site
+    gy = get_global_id(0) / roundCharacters;
     if (gy > sites) return;
     long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gy*roundCharacters + gx;
     float privateParentScratch = 1.0f;

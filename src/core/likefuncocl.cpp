@@ -872,6 +872,9 @@ double _OCLEvaluator::oclmain(void)
      //       sizeof(cl_double)*1, result_cache, 0,
       //      NULL, NULL);
 #else
+    ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmNode_cache, CL_FALSE, 0,
+                sizeof(cl_float)*roundCharacters*siteCount*(flatNodes.lLength), node_cache, 0,
+                NULL, NULL);
     //ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
      //       sizeof(cl_float)*roundUpToNextPowerOfTwo(siteCount), result_cache, 0,
       //      NULL, NULL);
@@ -921,6 +924,12 @@ double _OCLEvaluator::oclmain(void)
     queueSecs += (queueEnd.tv_sec - queueStart.tv_sec)+(queueEnd.tv_nsec - queueStart.tv_nsec)/BILLION;
     clock_gettime(CLOCK_MONOTONIC, &mainStart);
 #endif
+/*
+    printf("Node_Cache: \n");
+    for (int i = 0; i < siteCount*roundCharacters; i++)
+        printf("%4.10g ", ((fpoint*)node_cache)[i]);
+    printf("\n\n");
+*/
 
 #ifdef __GPUResults__
 	/*
