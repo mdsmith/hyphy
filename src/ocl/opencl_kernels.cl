@@ -140,19 +140,19 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
                          )
 {
     // Get thread specific junk going (where it is in the parent cache)
-    short tx = get_local_id(0);    
+    int tx = get_local_id(0);    
     int pchar = tx % roundCharacters;
-    short gx = get_global_id(0);   
+    int gx = get_global_id(0);   
     int site = gx / roundCharacters;
-    int localSite = tx / roundCharacters;
+    //int localSite = tx / roundCharacters;
     // Cache that parent character value!
-    long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gx;
+    long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + site*roundCharacters + pchar;
     float privateParentScratch = 1.0f;
-    short scale = 0;
+    //short scale = 0;
     if (intTagState == 1 && site < sites && pchar < characters)
     {
         privateParentScratch = node_cache[parentCharacterIndex];
-        scale = scalings[parentCharacterIndex];
+        //scale = scalings[parentCharacterIndex];
     }
     
     // Now lets start the matrix multiplication
@@ -163,7 +163,7 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
     float sum = 0.0;
     for (int i = 0; i < roundCharacters; i++)
     {
-        float childValue = node_cache[childNodeIndex*sites*roundCharacters + site + i];
+        float childValue = node_cache[childNodeIndex*sites*roundCharacters + site*roundCharacters + i];
         float modelValue = model[nodeID*roundCharacters*roundCharacters + roundCharacters * pchar + i];
         sum += childValue * modelValue;
     }
@@ -171,7 +171,7 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
     {
         privateParentScratch *= sum;
         node_cache[parentCharacterIndex] = privateParentScratch;
-        root_cache[site + pchar] = privateParentScratch;
+        root_cache[site*roundCharacters + pchar] = privateParentScratch;
     }
 /*
         
@@ -254,6 +254,24 @@ __kernel void ResultKernel (    __global int* freq_cache,                   // a
                                  long characters                               // argument 8
                              )
 {
+    int site = get_global_id(0) / roundCharacters;
+    int pchar = get_global_id(0) % roundCharacters;
+    if (pchar != 0) return;
+    if (site > sites) return;
+    result_cache[site-1] = 0.0;
+    float acc = 0.0;
+    //int scale = root_scalings[site * roundCharacters];
+    for (int rChar = 0; rChar < characters; rChar++)
+    {
+        acc += root_cache[site*roundCharacters + rChar] * prob_cache[rChar];
+    }
+    //result_cache[site] += (native_log(acc)-scale*native_log(scalar)) * freq_cache[site];
+    result_cache[site-1] += native_log(acc) * freq_cache[site];
+/*
+*/
+    
+    
+/*
     // shrink the work group to sites, rather than sites x characters
     #ifdef __GPUResults__
     int site = get_global_id(0);
@@ -302,12 +320,12 @@ __kernel void ResultKernel (    __global int* freq_cache,                   // a
             acc += root_cache[site*roundCharacters + rChar] * prob_cache[rChar];
         }
         result_cache[site] += (native_log(acc)-scale*native_log(scalar)) * freq_cache[site];
+        result_cache[get_local_id(0)] = 1.2;
         //site += get_local_size(0)*get_local_size(1);
     //}
     //barrier(CLK_LOCAL_MEM_FENCE);
     #endif
-    /*
-    */
+*/
 }
 __kernel void ReductionKernel ( __global double* result_cache               // argument 1
                              )

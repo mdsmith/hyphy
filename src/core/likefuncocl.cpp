@@ -872,9 +872,6 @@ double _OCLEvaluator::oclmain(void)
      //       sizeof(cl_double)*1, result_cache, 0,
       //      NULL, NULL);
 #else
-    ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmNode_cache, CL_FALSE, 0,
-                sizeof(cl_float)*roundCharacters*siteCount*(flatNodes.lLength), node_cache, 0,
-                NULL, NULL);
     //ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
      //       sizeof(cl_float)*roundUpToNextPowerOfTwo(siteCount), result_cache, 0,
       //      NULL, NULL);
@@ -884,7 +881,7 @@ double _OCLEvaluator::oclmain(void)
     //ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
     //        sizeof(clfp)*roundUpToNextPowerOfTwo(siteCount), result_cache, 0,
      //       NULL, NULL);
-    ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_TRUE, 0,
+    ciErr1 |= clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_TRUE, 0,
             sizeof(clfp)*siteCount, result_cache, 0,
             NULL, NULL);
 #endif
@@ -953,13 +950,35 @@ double _OCLEvaluator::oclmain(void)
         printf("%4.10g ", ((fpoint*)result_cache)[i]);
     printf("\n\n");
 	*/
-    oResult = ((fpoint*)result_cache)[0];
+
+    //oResult = ((fpoint*)result_cache)[0];
 #else
     //#pragma omp parallel for reduction (+:oResult) schedule(static)
-    for (int i = 0; i < siteCount; i++)
+    for (int i = 0; i < siteCount-1; i++)
     {
+        //printf("oResult: %4.10g \n", oResult);
         oResult += ((fpoint*)result_cache)[i];
+        //oResult = ((fpoint*)result_cache)[i];
     }
+
+/*
+    _Parameter result = 0.0;
+    //fpoint *rootConditionals = ((fpoint*)node_cache) + alphabetDimension * ((flatTree.lLength - 1) * siteCount);
+    fpoint *rootConditionals = ((fpoint*)root_cache);
+
+    for (long siteI = 0; siteI < siteCount; siteI++)
+    {
+        _Parameter acc = 0.0;
+        for (long cI = 0; cI < alphabetDimension; cI++, rootConditionals++)
+        {
+            printf("%4.10g ", *rootConditionals);
+            acc += *rootConditionals * theProbs[cI];
+        }
+        result += log(acc) * theFrequencies[siteI];
+    }
+    printf("result: %f", result);
+*/
+
 #ifdef __VERBOSE__
     printf("Result_Cache: \n");
     for (int i = 0; i < siteCount; i++)
@@ -997,7 +1016,9 @@ double _OCLEvaluator::oclmain(void)
     clock_gettime(CLOCK_MONOTONIC, &mainEnd);
     mainSecs += (mainEnd.tv_sec - mainStart.tv_sec)+(mainEnd.tv_nsec - mainStart.tv_nsec)/BILLION;
 #endif
+    //printf("oResult: %4.10g \n", oResult);
     return oResult;
+    //return result;
 }
 
 
