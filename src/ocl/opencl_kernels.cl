@@ -136,7 +136,8 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
                          __global int* scalings,                    // argument 11
                          float scalar,                          // argument 12
                          float uFlowThresh,                     // argument 13
-                         __global int* root_scalings                // argument 10
+                         __global int* root_scalings,                // argument 10
+                         int sharedMemorySize
                          )
 {
     // Get thread specific junk going (where it is in the parent cache)
@@ -158,13 +159,20 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
     // Now lets start the matrix multiplication
 
     // TODO Pass in scratch size, so I can cache more if possible. 16kb min??
-    //__local float modelScratch[64][64];
+    __local float modelScratch[64 * 64];
+    int modelI = tx;
+    while (modelI < roundCharacters*roundCharacters)
+    {
+        modelScratch[modelI] = model[nodeID*roundCharacters*roundCharacters + modelI];
+        modelI += get_local_size(0);
+    }
 
     float sum = 0.0;
     for (int i = 0; i < roundCharacters; i++)
     {
         float childValue = node_cache[childNodeIndex*sites*roundCharacters + site*roundCharacters + i];
-        float modelValue = model[nodeID*roundCharacters*roundCharacters + roundCharacters * pchar + i];
+        //float modelValue = model[nodeID*roundCharacters*roundCharacters + roundCharacters * pchar + i];
+        float modelValue = modelScratch[roundCharacters*pchar + i];
         sum += childValue * modelValue;
     }
     if (site < sites && pchar < characters)

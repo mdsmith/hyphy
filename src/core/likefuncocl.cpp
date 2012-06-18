@@ -533,6 +533,7 @@ int _OCLEvaluator::setupContext(void)
     long tempRoundCharCount = roundUpToNextPowerOfTwo(alphabetDimension);
     int  tempTagIntState = 0;
     int   tempNodeID = 0;
+    int sharedMemorySize = maxLocalSize;
     float tempScalar = scalar;
     // this is currently ignored, 1 is hardcoded into the kernel code. 
     float tempuFlowThresh = 0.000000001f;
@@ -582,6 +583,7 @@ int _OCLEvaluator::setupContext(void)
     ciErr1 |= clSetKernelArg(ckInternalKernel, 12, sizeof(cl_float), (void*)&tempScalar);
     ciErr1 |= clSetKernelArg(ckInternalKernel, 13, sizeof(cl_float), (void*)&tempuFlowThresh);
     ciErr1 |= clSetKernelArg(ckInternalKernel, 14, sizeof(cl_mem), (void*)&cmroot_scalings);
+    ciErr1 |= clSetKernelArg(ckInternalKernel, 15, sizeof(cl_int), (void*)&sharedMemorySize);
 
     ciErr1 |= clSetKernelArg(ckResultKernel, 0, sizeof(cl_mem), (void*)&cmFreq_cache);
     ciErr1 |= clSetKernelArg(ckResultKernel, 1, sizeof(cl_mem), (void*)&cmProb_cache);
