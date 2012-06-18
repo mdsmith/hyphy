@@ -954,7 +954,7 @@ double _OCLEvaluator::oclmain(void)
     //oResult = ((fpoint*)result_cache)[0];
 #else
     //#pragma omp parallel for reduction (+:oResult) schedule(static)
-    for (int i = 0; i < siteCount-1; i++)
+    for (int i = 0; i < siteCount; i++)
     {
         //printf("oResult: %4.10g \n", oResult);
         oResult += ((fpoint*)result_cache)[i];

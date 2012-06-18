@@ -258,7 +258,7 @@ __kernel void ResultKernel (    __global int* freq_cache,                   // a
     int pchar = get_global_id(0) % roundCharacters;
     if (pchar != 0) return;
     if (site > sites) return;
-    result_cache[site-1] = 0.0;
+    result_cache[site] = 0.0;
     float acc = 0.0;
     //int scale = root_scalings[site * roundCharacters];
     for (int rChar = 0; rChar < characters; rChar++)
@@ -266,7 +266,8 @@ __kernel void ResultKernel (    __global int* freq_cache,                   // a
         acc += root_cache[site*roundCharacters + rChar] * prob_cache[rChar];
     }
     //result_cache[site] += (native_log(acc)-scale*native_log(scalar)) * freq_cache[site];
-    result_cache[site-1] += native_log(acc) * freq_cache[site];
+    //result_cache[site-1] += native_log(acc) * freq_cache[site];
+    result_cache[site] += native_log(acc) * freq_cache[site];
 /*
 */
     
