@@ -61,7 +61,7 @@ typedef cl_float clfp;
 #endif
 
 //#define __VERBOSE__
-#define OCLGPU
+//#define OCLGPU
 #ifdef OCLGPU
 #define OCLTARGET " #define BLOCK_SIZE 16 \n"
 #else
@@ -263,6 +263,10 @@ int _OCLEvaluator::setupContext(void)
     printf("LocalSize: %ld, Const size: %ld\n", (long unsigned) maxLocalSize, (long unsigned) maxConstSize);
 
     printf("sites: %ld\n", siteCount);
+
+#ifndef OCLGPU
+    maxLocalSize = 0;
+#endif
 
 /*
     // max number of sites that can be addressed in one work group based on shared memory size 
