@@ -61,7 +61,7 @@ typedef cl_float clfp;
 #endif
 
 //#define __VERBOSE__
-//#define OCLGPU
+#define OCLGPU
 #ifdef OCLGPU
 #define OCLTARGET " #define BLOCK_SIZE 16 \n"
 #else
@@ -588,6 +588,8 @@ int _OCLEvaluator::setupContext(void)
     ciErr1 |= clSetKernelArg(ckInternalKernel, 13, sizeof(cl_float), (void*)&tempuFlowThresh);
     ciErr1 |= clSetKernelArg(ckInternalKernel, 14, sizeof(cl_mem), (void*)&cmroot_scalings);
     ciErr1 |= clSetKernelArg(ckInternalKernel, 15, sizeof(cl_int), (void*)&sharedMemorySize);
+    ciErr1 |= clSetKernelArg(ckInternalKernel, 16, sizeof(cl_float) * roundCharacters * roundCharacters, NULL);
+    ciErr1 |= clSetKernelArg(ckInternalKernel, 17, sizeof(cl_float) * roundCharacters * 4, NULL);
 
     ciErr1 |= clSetKernelArg(ckResultKernel, 0, sizeof(cl_mem), (void*)&cmFreq_cache);
     ciErr1 |= clSetKernelArg(ckResultKernel, 1, sizeof(cl_mem), (void*)&cmProb_cache);
@@ -871,7 +873,7 @@ double _OCLEvaluator::oclmain(void)
     //ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
      //       sizeof(cl_double)*roundUpToNextPowerOfTwo(siteCount), result_cache, 0,
       //      NULL, NULL);
-    ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALE, 0,
+    ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
             sizeof(clfp), result_cache, 0,
             NULL, NULL);
     //ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
@@ -887,7 +889,7 @@ double _OCLEvaluator::oclmain(void)
     //ciErr1 = clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
     //        sizeof(clfp)*roundUpToNextPowerOfTwo(siteCount), result_cache, 0,
      //       NULL, NULL);
-    ciErr1 |= clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_TRUE, 0,
+    ciErr1 |= clEnqueueReadBuffer(cqCommandQueue, cmResult_cache, CL_FALSE, 0,
             sizeof(clfp)*siteCount, result_cache, 0,
             NULL, NULL);
 #endif

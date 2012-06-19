@@ -137,7 +137,9 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
                          float scalar,                          // argument 12
                          float uFlowThresh,                     // argument 13
                          __global int* root_scalings,                // argument 10
-                         int sharedMemorySize
+                         int sharedMemorySize,
+                         __local float* modelScratch,
+                         __local float* childScratch
                          )
 {
     // Get thread specific junk going (where it is in the parent cache)
@@ -147,6 +149,7 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
     int site = gx / roundCharacters;
     int numSites = get_local_size(0) / roundCharacters;
     int groupStartSite = (gx - tx) / roundCharacters; // this should get me to the first site in the work group
+    int localSite = tx / roundCharacters;
     //int localSite = tx / roundCharacters;
     // Cache that parent character value!
     long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + site*roundCharacters + pchar;
@@ -161,34 +164,27 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
     // Now lets start the matrix multiplication
 
     float sum = 0.0;
+/*
+*/
     if (sharedMemorySize >= 32768)
     {
-        __local float modelScratch[64 * 64];
         int modelI = tx;
         while (modelI < roundCharacters*roundCharacters)
         {
             modelScratch[modelI] = model[nodeID*roundCharacters*roundCharacters + modelI];
             modelI += get_local_size(0);
         }
-/*
-        int childI = tx;
-        while (childI < roundCharacters*numSites)
-        {
-            childScratch[childI] = node_cache[childNodeIndex*sites*roundCharacters + groupStartSite*roundCharacters + childI];
-            childI += get_local_size(0);
-        }
-*/
+        childScratch[tx] = node_cache[childNodeIndex*sites*roundCharacters + groupStartSite*roundCharacters + tx];
         barrier(CLK_LOCAL_MEM_FENCE);
         for (int i = 0; i < roundCharacters; i++)
         {
-            float childValue = node_cache[childNodeIndex*sites*roundCharacters + site*roundCharacters + i];
-            float modelValue = modelScratch[roundCharacters*pchar + i];
-            sum += childValue * modelValue;
+            sum += childScratch[localSite*roundCharacters + i] * modelScratch[roundCharacters*pchar + i];
         }
     }
+/*
+*/
     else if (sharedMemorySize >= 16384)
     {
-        __local float modelScratch[64 * 64];
         int modelI = tx;
         while (modelI < roundCharacters*roundCharacters)
         {
@@ -218,9 +214,7 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
         node_cache[parentCharacterIndex] = privateParentScratch;
         root_cache[site*roundCharacters + pchar] = privateParentScratch;
     }
-/*
         
-*/
     
 
 
