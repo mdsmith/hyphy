@@ -164,8 +164,6 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
     // Now lets start the matrix multiplication
 
     float sum = 0.0;
-/*
-*/
     if (sharedMemorySize >= 32768)
     {
         int modelI = tx;
@@ -181,8 +179,6 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
             sum += childScratch[localSite*roundCharacters + i] * modelScratch[roundCharacters*pchar + i];
         }
     }
-/*
-*/
     else if (sharedMemorySize >= 16384)
     {
         int modelI = tx;

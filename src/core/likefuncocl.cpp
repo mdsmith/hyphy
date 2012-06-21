@@ -34,7 +34,7 @@ typedef cl_float clfp;
 #define PRAGMADEF " \n"
 //#pragma OPENCL EXTENSION cl_khr_fp64: enable
 #elif defined(__NVIDIAOCL__)
-#define __GPUResults__
+//#define __GPUResults__
 #define __OCLPOSIX__
 //#include <oclUtils.h>
 #include <CL/opencl.h>
@@ -233,12 +233,31 @@ int _OCLEvaluator::setupContext(void)
 
 
     //Get the devices
+
 #ifdef OCLGPU
-    ciErr1 = clGetDeviceIDs(cpPlatform, CL_DEVICE_TYPE_GPU, 1, &cdDevice, NULL);
+    cl_uint ciDeviceCount;
+    cl_device_id* cdDevices;
+    ciErr1 = clGetDeviceIDs(cpPlatform, CL_DEVICE_TYPE_GPU, 0, NULL, &ciDeviceCount);
+    if (ciErr1 != CL_SUCCESS)
+    {
+        printf("Could not get number of devices");
+    }
+    //ciDeviceCount = 1;
+    cdDevices = (cl_device_id *)malloc(ciDeviceCount * sizeof(cl_device_id));
+    ciErr1 = clGetDeviceIDs(cpPlatform, CL_DEVICE_TYPE_GPU, ciDeviceCount, cdDevices, NULL);
+    if (ciErr1 != CL_SUCCESS)
+    {
+        printf("Could not get devices");
+    }
+    //ciErr1 = clGetDeviceIDs(cpPlatform, CL_DEVICE_TYPE_GPU, 1, &cdDevice, NULL);
+    cdDevice = cdDevices[0];
 #else
     ciErr1 = clGetDeviceIDs(cpPlatform, CL_DEVICE_TYPE_CPU, 1, &cdDevice, NULL);
 #endif
  //   printf("clGetDeviceIDs...\n");
+    char cDeviceName [256];
+    ciErr1 |= clGetDeviceInfo(cdDevice, CL_DEVICE_NAME, sizeof(cDeviceName), cDeviceName, NULL);
+    printf("Device: %s\n", cDeviceName);
     if (ciErr1 != CL_SUCCESS)
     {
         printf("Error in clGetDeviceIDs, Line %u in file %s !!!\n\n", __LINE__, __FILE__);
@@ -267,6 +286,7 @@ int _OCLEvaluator::setupContext(void)
 #ifndef OCLGPU
     maxLocalSize = 0;
 #endif
+    maxLocalSize = 0;
 
 /*
     // max number of sites that can be addressed in one work group based on shared memory size 
@@ -588,8 +608,10 @@ int _OCLEvaluator::setupContext(void)
     ciErr1 |= clSetKernelArg(ckInternalKernel, 13, sizeof(cl_float), (void*)&tempuFlowThresh);
     ciErr1 |= clSetKernelArg(ckInternalKernel, 14, sizeof(cl_mem), (void*)&cmroot_scalings);
     ciErr1 |= clSetKernelArg(ckInternalKernel, 15, sizeof(cl_int), (void*)&sharedMemorySize);
-    ciErr1 |= clSetKernelArg(ckInternalKernel, 16, sizeof(cl_float) * roundCharacters * roundCharacters, NULL);
-    ciErr1 |= clSetKernelArg(ckInternalKernel, 17, sizeof(cl_float) * roundCharacters * 4, NULL);
+    ciErr1 |= clSetKernelArg(ckInternalKernel, 16, sizeof(cl_float), NULL);
+    ciErr1 |= clSetKernelArg(ckInternalKernel, 17, sizeof(cl_float), NULL);
+    //ciErr1 |= clSetKernelArg(ckInternalKernel, 16, sizeof(cl_float) * roundCharacters * roundCharacters, NULL);
+    //ciErr1 |= clSetKernelArg(ckInternalKernel, 17, sizeof(cl_float) * roundCharacters * 4, NULL);
 
     ciErr1 |= clSetKernelArg(ckResultKernel, 0, sizeof(cl_mem), (void*)&cmFreq_cache);
     ciErr1 |= clSetKernelArg(ckResultKernel, 1, sizeof(cl_mem), (void*)&cmProb_cache);
