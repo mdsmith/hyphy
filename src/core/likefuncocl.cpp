@@ -34,7 +34,7 @@ typedef cl_float clfp;
 #define PRAGMADEF " \n"
 //#pragma OPENCL EXTENSION cl_khr_fp64: enable
 #elif defined(__NVIDIAOCL__)
-#define __GPUResults__
+//#define __GPUResults__
 #define __OCLPOSIX__
 //#include <oclUtils.h>
 #include <CL/opencl.h>
