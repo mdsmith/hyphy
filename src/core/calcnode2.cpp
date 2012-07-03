@@ -2,27 +2,38 @@
 
 HyPhy - Hypothesis Testing Using Phylogenies.
 
-Copyright (C) 1997-2008
-Primary Development:
-  Sergei L Kosakovsky Pond (sergeilkp@mac.com)
+Copyright (C) 1997-now
+Core Developers:
+  Sergei L Kosakovsky Pond (spond@ucsd.edu)
+  Art FY Poon    (apoon@cfenet.ubc.ca)
+  Steven Weaver (sweaver@ucsd.edu)
+  
+Module Developers:
+	Lance Hepler (nlhepler@gmail.com)
+	Martin Smith (martin.audacis@gmail.com)
+
 Significant contributions from:
   Spencer V Muse (muse@stat.ncsu.edu)
-  Simon DW Frost (sdfrost@ucsd.edu)
-  Art FY Poon    (apoon@biomail.ucsd.edu)
+  Simon DW Frost (sdf22@cam.ac.uk)
 
-This program is free software; you can redistribute it and/or
-modify it under the terms of the GNU General Public License
-as published by the Free Software Foundation; either version 2
-of the License, or (at your option) any later version.
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 */
 
@@ -30,6 +41,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "likefunc.h"
 #include "scfg.h"
 #include <math.h>
+#include <float.h>
 
 #ifdef    __HYPHYDMALLOC__
 #include "dmalloc.h"
@@ -641,15 +653,35 @@ _Parameter      _TheTree::ComputeTreeBlockByBranch  (                   _SimpleL
 
 #ifndef _SLKP_SSE_VECTORIZATION_
 
-                if (alphabetDimension > alphabetDimensionmod4)
+                if (alphabetDimension > alphabetDimensionmod4){
+                    
+                    /*_Parameter maxParentP = _lfScalingFactorThreshold;
+                    
+                    for (long p = 0; p < alphabetDimension; p++)
+                        if (parentConditionals[p] > maxParentP) {
+                            maxParentP = parentConditionals[p];
+                        } 
+                        
+                    maxParentP *= DBL_EPSILON;  */      
+                    
                     for (long p = 0; p < alphabetDimension; p++) {
+                        /*if (parentConditionals[p] < maxParentP) {
+                            tMatrix               += alphabetDimension;
+                            continue;
+                        }*/
+                        
                         _Parameter      accumulator = 0.0;
 
                         for (long c = 0; c < alphabetDimensionmod4; c+=4) // 4 - unroll the loop
-                            accumulator +=  tMatrix[c]   * childVector[c] +
-                                            tMatrix[c+1] * childVector[c+1] +
-                                            tMatrix[c+2] * childVector[c+2] +
-                                            tMatrix[c+3] * childVector[c+3];
+                        {
+                             _Parameter pr1 =    tMatrix[c]   * childVector[c],
+                                        pr2 =    tMatrix[c+1] * childVector[c+1],
+                                        pr3 =    tMatrix[c+2] * childVector[c+2],
+                                        pr4 =    tMatrix[c+3] * childVector[c+3];
+                            pr1 += pr2;
+                            pr3 += pr4;
+                            accumulator += pr1+pr3;
+                        }
 
                         for (long c = alphabetDimensionmod4; c < alphabetDimension; c++) {
                             accumulator +=  tMatrix[c] * childVector[c];
@@ -658,6 +690,7 @@ _Parameter      _TheTree::ComputeTreeBlockByBranch  (                   _SimpleL
                         tMatrix               += alphabetDimension;
                         sum += (parentConditionals[p] *= accumulator);
                     }
+                }
                 else
                     for (long p = 0; p < alphabetDimension; p++) {
                         _Parameter      accumulator = 0.0;
@@ -1089,10 +1122,15 @@ void            _TheTree::ComputeBranchCache    (
                     _Parameter      accumulator = 0.0;
 
                     for (long c = 0; c < alphabetDimensionmod4; c+=4) // 4 - unroll the loop
-                        accumulator +=  tMatrix[c]   * childVector[c] +
-                                        tMatrix[c+1] * childVector[c+1] +
-                                        tMatrix[c+2] * childVector[c+2] +
-                                        tMatrix[c+3] * childVector[c+3];
+                    {
+                        _Parameter  pr1 =    tMatrix[c]   * childVector[c],
+                                    pr2 =    tMatrix[c+1] * childVector[c+1],
+                                    pr3 =    tMatrix[c+2] * childVector[c+2],
+                                    pr4 =    tMatrix[c+3] * childVector[c+3];
+                         pr1 += pr2;
+                         pr3 += pr4;
+                         accumulator += pr1+pr3;
+                    }
 
                     for (long c = alphabetDimensionmod4; c < alphabetDimension; c++) {
                         accumulator +=  tMatrix[c] * childVector[c];
@@ -1193,25 +1231,26 @@ _Parameter          _TheTree::ComputeLLWithBranchCache (
     _Parameter  *   _hprestrict_ transitionMatrix = givenTreeNode->GetCompExp(catID)->theData;
 
     for (long siteID = siteFrom; siteID < siteTo; siteID++) {
-        _Parameter accumulator = 0.,
-                   *rmx        = transitionMatrix;
+        _Parameter accumulator = 0.;
+        
 
 
         if (alphabetDimension == 4) {
             accumulator =    rootConditionals[0] * theProbs[0] *
-                             (branchConditionals[0] *  rmx[0] + branchConditionals[1] *  rmx[1] + branchConditionals[2] *  rmx[2] + branchConditionals[3] *  rmx[3]) +
+                             (branchConditionals[0] *  transitionMatrix[0] + branchConditionals[1] *  transitionMatrix[1] + branchConditionals[2] *  transitionMatrix[2] + branchConditionals[3] *  transitionMatrix[3]) +
                              rootConditionals[1] * theProbs[1] *
-                             (branchConditionals[0] *  rmx[4] + branchConditionals[1] *  rmx[5] + branchConditionals[2] *  rmx[6] + branchConditionals[3] *  rmx[7]) +
+                             (branchConditionals[0] *  transitionMatrix[4] + branchConditionals[1] *  transitionMatrix[5] + branchConditionals[2] *  transitionMatrix[6] + branchConditionals[3] *  transitionMatrix[7]) +
                              rootConditionals[2] * theProbs[2] *
-                             (branchConditionals[0] *  rmx[8] + branchConditionals[1] *  rmx[9] + branchConditionals[2] *  rmx[10] + branchConditionals[3] *  rmx[11]) +
+                             (branchConditionals[0] *  transitionMatrix[8] + branchConditionals[1] *  transitionMatrix[9] + branchConditionals[2] *  transitionMatrix[10] + branchConditionals[3] *  transitionMatrix[11]) +
                              rootConditionals[3] * theProbs[3] *
-                             (branchConditionals[0] *  rmx[12] + branchConditionals[1] *  rmx[13] + branchConditionals[2] *  rmx[14] + branchConditionals[3] *  rmx[15]);
+                             (branchConditionals[0] *  transitionMatrix[12] + branchConditionals[1] *  transitionMatrix[13] + branchConditionals[2] *  transitionMatrix[14] + branchConditionals[3] *  transitionMatrix[15]);
             rootConditionals += 4;
         } else {
+            long       rmx = 0;
             for (long p = 0; p < alphabetDimension; p++,rootConditionals++) {
                 _Parameter     r2 = 0.;
                 for (long c = 0; c < alphabetDimension; c++, rmx++) {
-                    r2 += branchConditionals[c] *  *rmx;
+                    r2 += branchConditionals[c] *  transitionMatrix[rmx];
                 }
                 accumulator += *rootConditionals * theProbs[p] * r2;
             }

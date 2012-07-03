@@ -58,7 +58,7 @@ _String     _HYBgm_NODE_INDEX   ("NodeID"),
 void        ConsoleBGMStatus (_String, _Parameter, _String * fileName = nil);
 
 
-void        ConsoleBGMStatus (_String statusLine, _Parameter percentDone, _String * fileName = nil)
+void        ConsoleBGMStatus (_String statusLine, _Parameter percentDone, _String * fileName)
 {
     FILE           *outFile = fileName?doFileOpen (fileName->sData,"w"):nil;
     _String        reportLine (statusLine);
@@ -95,7 +95,7 @@ long        integerPower (long base, long exponent)
 {
     //  Rapid computation of an integer power.
     long    result = 1,
-            mask   = 1<<(sizeof(long)*8-2); // left shift to left-most position of binary sequence for long integer
+            mask   = 1L<<(sizeof(long)*8-2); // left shift to left-most position of binary sequence for long integer
     // e.g. 100...0 (30 zeroes for signed long)
 
     while ((exponent & mask) == 0) {
@@ -209,16 +209,28 @@ _BayesianGraphicalModel::_BayesianGraphicalModel (_AssociativeList * nodes)
         //                                      "PriorPrecision" - hyperparameter for Gaussian node
         //                                      "PriorScale"    - fourth hyperparameter for Gaussian node
 
-        _String name = (_String *) (this_avl->GetByKey (_HYBgm_NODE_INDEX, STRING))->toStr();
-
-        node_names && (const char *) name;  // append a pointer to _String duplicate
+        _FString *name = (_FString*)this_avl->GetByKey (_HYBgm_NODE_INDEX, STRING);
+        if (!name){
+            WarnError("Invalid node name (expected a string) passed to a BGM constructor");
+            return;
+        }
+        
+        node_names.AppendNewInstance(new _String (*name->theString));  // append a pointer to _String duplicate
 
         // DEBUGGING
-        ReportWarning (_String("node_name[") & node & "]=" & (_String *)node_names.lData[node]);
-
+        /* wuz: ReportWarning (_String("node_name[") & node & "]=" & (_String *)node_names.lData[node]);
+         20111210 SLKP : _String (_String*) contstructor will actually assume that the argument is 
+                       : 'unencumbered' i.e. not a member of _Lists etc
+                       : this function call will create a stack copy of node_names.lData[node]
+                       : print it to messages.log and then kill the dynamic portion of the object (sData)
+                       : this will create all kinds of havoc downstream
+         */
+        // bug fix:
+        ReportWarning (_String("node_name[") & node & "]=" & *((_String *)node_names.lData[node]));
+        
 
         // node type (0 = discrete, 1 = continuous)
-        if (avl_val = (_Constant *) (this_avl->GetByKey (_HYBgm_NODETYPE, NUMBER))) {
+        if ((avl_val = (_Constant *) (this_avl->GetByKey (_HYBgm_NODETYPE, NUMBER)))) {
             node_type.lData[node] = (long)(avl_val->Value());
             if (node_type.lData[node] < 0 || node_type.lData[node] > 2) {
                 errorMessage = _String("Unsupported NodeType ") & node_type.lData[node] & " for node " & node;
@@ -231,7 +243,7 @@ _BayesianGraphicalModel::_BayesianGraphicalModel (_AssociativeList * nodes)
 
 
         // number of levels (discrete nodes)
-        if (avl_val = (_Constant *) (this_avl->GetByKey (_HYBgm_NUM_LEVELS, NUMBER))) {
+        if ((avl_val = (_Constant *) (this_avl->GetByKey (_HYBgm_NUM_LEVELS, NUMBER)))) {
             num_levels.lData[node] = (long)(avl_val->Value());
 
             if (num_levels.lData[node] <= 1) {
@@ -247,7 +259,7 @@ _BayesianGraphicalModel::_BayesianGraphicalModel (_AssociativeList * nodes)
 
 
         // max parents
-        if (avl_val = (_Constant *) (this_avl->GetByKey (_HYBgm_MAX_PARENT, NUMBER))) {
+        if ((avl_val = (_Constant *) (this_avl->GetByKey (_HYBgm_MAX_PARENT, NUMBER)))) {
             max_parents.lData[node] = (long)(avl_val->Value());
 
             if (max_parents.lData[node] > global_max_parents) {
@@ -270,7 +282,7 @@ _BayesianGraphicalModel::_BayesianGraphicalModel (_AssociativeList * nodes)
 
 
         // prior sample size
-        if (avl_val = (_Constant *) (this_avl->GetByKey (_HYBgm_PRIOR_SIZE, NUMBER))) {
+        if ((avl_val = (_Constant *) (this_avl->GetByKey (_HYBgm_PRIOR_SIZE, NUMBER)))) {
             prior_sample_size.Store (node, 0, (_Parameter) (avl_val->Value()));
 
             if (prior_sample_size(node,0) < 0) {
@@ -284,7 +296,7 @@ _BayesianGraphicalModel::_BayesianGraphicalModel (_AssociativeList * nodes)
 
 
         // prior mean (Gaussian)
-        if (avl_val = (_Constant *) (this_avl->GetByKey (_HYBgm_PRIOR_MEAN, NUMBER))) {
+        if ((avl_val = (_Constant *) (this_avl->GetByKey (_HYBgm_PRIOR_MEAN, NUMBER)))) {
             prior_mean.Store (node, 0, (_Parameter) (avl_val->Value()));
         } else if (!avl_val && node_type.lData[node] == 1) {
             errorMessage = _String ("Missing PriorMean in associative array for node ") & node;
@@ -293,7 +305,7 @@ _BayesianGraphicalModel::_BayesianGraphicalModel (_AssociativeList * nodes)
 
 
         // prior precision (Gaussian)
-        if (avl_val = (_Constant *) (this_avl->GetByKey (_HYBgm_PRIOR_PRECISION, NUMBER))) {
+        if ((avl_val = (_Constant *) (this_avl->GetByKey (_HYBgm_PRIOR_PRECISION, NUMBER)))) {
             prior_precision.Store (node, 0, (_Parameter) (avl_val->Value()));
 
             if (avl_val <= 0) {
@@ -308,7 +320,7 @@ _BayesianGraphicalModel::_BayesianGraphicalModel (_AssociativeList * nodes)
 
 
         // prior scale (Gaussian)
-        if (avl_val = (_Constant *) (this_avl->GetByKey (_HYBgm_PRIOR_SCALE, NUMBER))) {
+        if ((avl_val = (_Constant *) (this_avl->GetByKey (_HYBgm_PRIOR_SCALE, NUMBER)))) {
             prior_scale.Store (node, 0, (_Parameter) (avl_val->Value()));
 
             if (avl_val <= 0) {

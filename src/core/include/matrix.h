@@ -2,27 +2,38 @@
 
 HyPhy - Hypothesis Testing Using Phylogenies.
 
-Copyright (C) 1997-2006
-Primary Development:
-  Sergei L Kosakovsky Pond (sergeilkp@mac.com)
+Copyright (C) 1997-now
+Core Developers:
+  Sergei L Kosakovsky Pond (spond@ucsd.edu)
+  Art FY Poon    (apoon@cfenet.ubc.ca)
+  Steven Weaver (sweaver@ucsd.edu)
+  
+Module Developers:
+	Lance Hepler (nlhepler@gmail.com)
+	Martin Smith (martin.audacis@gmail.com)
+
 Significant contributions from:
   Spencer V Muse (muse@stat.ncsu.edu)
-  Simon DW Frost (sdfrost@ucsd.edu)
-  Art FY Poon    (apoon@biomail.ucsd.edu)
+  Simon DW Frost (sdf22@cam.ac.uk)
 
-This program is free software; you can redistribute it and/or
-modify it under the terms of the GNU General Public License
-as published by the Free Software Foundation; either version 2
-of the License, or (at your option) any later version.
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 */
 
@@ -30,7 +41,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define     __MATRIX__
 
 #include "hy_strings.h"
-#include "parser.h"
+#include "avllistx.h"
+#include "variablecontainer.h"
+#include "trie.h"
 
 #define     _POLYNOMIAL_TYPE 0
 #define     _NUMERICAL_TYPE  1
@@ -39,6 +52,19 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define     HY_MATRIX_COLUMN_VECTOR     1
 #define     HY_MATRIX_ROW_VECTOR        2
 
+//_____________________________________________________________________________________________
+
+#define      _HY_MATRIX_RANDOM_DIRICHLET         01L
+#define      _HY_MATRIX_RANDOM_GAUSSIAN          02L
+#define      _HY_MATRIX_RANDOM_WISHART           03L
+#define      _HY_MATRIX_RANDOM_INVERSE_WISHART   04L
+#define      _HY_MATRIX_RANDOM_MULTINOMIAL       05L
+
+extern        _Trie        _HY_MatrixRandomValidPDFs;
+
+//_____________________________________________________________________________________________
+
+class _Formula;
 /*__________________________________________________________________________________________________________________________________________ */
 
 struct      _CompiledMatrixData {
@@ -49,6 +75,7 @@ struct      _CompiledMatrixData {
     _Parameter         * formulaValues;
 
     long      * formulaRefs;
+    bool        has_volatile_entries;
 
     _SimpleList varIndex,
                 formulasToEval;
@@ -162,7 +189,7 @@ public:
     // used to determine whether the matrix contains references
     // to other unknowns
 
-    virtual long        ObjectClass (void)      {
+    virtual unsigned long        ObjectClass (void)      {
         return MATRIX;
     }
 
@@ -177,7 +204,7 @@ public:
 
     virtual _PMathObj    MultObj (_PMathObj);   // multiplication operation on matrices
 
-    virtual _PMathObj    MultElements (_PMathObj);  // element wise multiplication operation on matrices
+    virtual _PMathObj    MultElements (_PMathObj, bool elementWiseDivide = false);  // element wise multiplication/division operation on matrices
 
     virtual _PMathObj    Sum          (void);
 
@@ -236,6 +263,9 @@ public:
     _Parameter  AbsValue                        (void);
     virtual     _PMathObj Log                   (void);
     // return the matrix of logs of every matrix element
+    
+    void        SwapRows (const long, const long);
+    long        CompareRows (const long, const long);
 
     _Parameter  operator () (long, long);       // read access to an element in a matrix
     _Parameter& operator [] (long);             // read/write access to an element in a matrix
@@ -470,7 +500,7 @@ private:
     void        Multiply            (_Matrix&, _Matrix&);
     bool        IsNonEmpty          (long);
     // checks to see if the i-th position in the storage is non-empty
-    void        CheckDimensions     (_Matrix&);
+    bool        CheckDimensions     (_Matrix&);
     // compare dims of 2 matrices to see if they can be multiplied
     long        HashBack            (long);
     // hashing function, which finds matrix
@@ -708,14 +738,22 @@ public:
 
     void                MStore          (_String  , _PMathObj, bool = true);
     void                MStore          (_String  , _String);
-    virtual long        ObjectClass     (void)      {
+    virtual unsigned long        ObjectClass     (void)      {
         return ASSOCIATIVE_LIST;
     }
     _List*              GetKeys         (void);
     void                FillInList      (_List&);
     _String*            Serialize       (_String&);
+    
+    /**
+     * Traverse the dictionary, cast each value into a float and return their sum.
+     * Note that matrices and dictionary values will be processed recursively, i.e. "Sum" will be called on them.
+     * All values that cannot be cast to a float will be treated as 0.
+     * @return The sum of all dictionary elements.
+     */
+    _PMathObj           Sum             (void);
 
-    _AVLListXL      avl;
+    _AVLListXL          avl;
 
 private:
 

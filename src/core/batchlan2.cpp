@@ -1,27 +1,42 @@
 /*
+ HyPhy - Hypothesis Testing Using Phylogenies.
+ 
+ Copyright (C) 1997-now
+ Core Developers:
+ Sergei L Kosakovsky Pond (spond@ucsd.edu)
+ Art FY Poon    (apoon@cfenet.ubc.ca)
+ Steven Weaver (sweaver@ucsd.edu)
+ 
+ Module Developers:
+ Lance Hepler (nlhepler@gmail.com)
+ Martin Smith (martin.audacis@gmail.com)
+ 
+ Significant contributions from:
+ Spencer V Muse (muse@stat.ncsu.edu)
+ Simon DW Frost (sdf22@cam.ac.uk)
+ 
+ Permission is hereby granted, free of charge, to any person obtaining a
+ copy of this software and associated documentation files (the
+ "Software"), to deal in the Software without restriction, including
+ without limitation the rights to use, copy, modify, merge, publish,
+ distribute, sublicense, and/or sell copies of the Software, and to
+ permit persons to whom the Software is furnished to do so, subject to
+ the following conditions:
+ 
+ The above copyright notice and this permission notice shall be included
+ in all copies or substantial portions of the Software.
+ 
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+ OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+ CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. 
+ */
 
-HyPhy - Hypothesis Testing Using Phylogenies.
-
-Copyright (C) 1997-2011
-  Sergei L Kosakovsky Pond (spond@ucsd.edu)
-  Art FY Poon              (apoon@cfenet.ubc.ca)
-
-This program is free software; you can redistribute it and/or
-modify it under the terms of the GNU General Public License
-as published by the Free Software Foundation; either version 2
-of the License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
-
-*/
-
+#include      "alignment.h"
+#include      "trie.h"
 #include      "likefunc.h"
 #include      "scfg.h"
 #include      <ctype.h>
@@ -33,7 +48,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #endif
 
 #ifndef __HYPHY_NO_SQLITE__
-#include "SQLite-3.6.17/sqlite3.h"
+#include "sqlite3.h"
 #endif
 
 #if !defined __HEADLESS__
@@ -69,6 +84,8 @@ _String     sqlOpen                 ("SQL_OPEN"),
             seqAlignGapLinearSpace  ("SEQ_ALIGN_LINEAR_SPACE"),
             seqAlignGapCodon3x1     ("SEQ_ALIGN_PARTIAL_3x1_SCORES"),
             seqAlignGapCodon3x2     ("SEQ_ALIGN_PARTIAL_3x2_SCORES"),
+            seqAlignGapCodon3x4     ("SEQ_ALIGN_PARTIAL_3x4_SCORES"),
+            seqAlignGapCodon3x5     ("SEQ_ALIGN_PARTIAL_3x5_SCORES"),
             completeFlag            ("COMPLETE"),
             conditionalWeights      ("WEIGHTS"),
             siteProbabilities       ("SITE_LOG_LIKELIHOODS"),
@@ -93,32 +110,65 @@ extern      _String                 blDoSQL,
             blRequireVersion,
             blAssert;
 
-_SimpleList sqlDatabases;
+_SimpleList sqlDatabases,
+            _HY_HBLCommandHelperAux;
+            
+_List        scfgList,
+             scfgNamesList,
+             bgmList,
+             bgmNamesList,
+             _HY_GetStringGlobalTypesAux;
+            
+_Trie        _HY_ValidHBLExpressions;
 
-_List       scfgList,
-            scfgNamesList,
-            bgmList,
-            bgmNamesList,
-            _HY_GetStringGlobalTypesAux;
-
-_AVLListX    _HY_GetStringGlobalTypes (&_HY_GetStringGlobalTypesAux);
-
-
+_AVLListX    _HY_GetStringGlobalTypes (&_HY_GetStringGlobalTypesAux),
+             _HY_HBLCommandHelper     (&_HY_HBLCommandHelperAux);
+             
 
 //____________________________________________________________________________________
 
 int          _HYSQLCallBack                     (void* data,int callCount);
 //int        _HYSQLBusyCallBack                 (void* exList,int cc,char** rd,char** cn);
-_Parameter   AlignStrings                       (_String*,_String*,_SimpleList&,_Matrix*,char,_Parameter,_Parameter,_Parameter,_Parameter,_Parameter,bool,bool,bool,_List&, long, _Matrix*, _Matrix*);
-_Parameter   CostOnly                           (_String*,_String*, long, long, long, long, bool, bool, _SimpleList&, _Matrix*, _Parameter, _Parameter, _Parameter, _Parameter, bool, bool,_Matrix&, _Matrix*, _Matrix*, char = 0, char* = nil);
-_Parameter   LinearSpaceAlign                   (_String*,_String*, _SimpleList&, _Matrix*, _Parameter, _Parameter, _Parameter, _Parameter, bool, bool, _SimpleList&,_Parameter,long,long,long,long,_Matrix**, char, char*);
-void         BacktrackAlign                     (_SimpleList&, long&, long&, _Parameter, _Parameter, _Parameter);
-void         BacktrackAlignCodon                (_SimpleList&, long&, long&, long);
-void         MismatchScore                      (_String*, _String*, long, long, _SimpleList&, _Matrix*, _Parameter&);
-void         MismatchScoreCodon                 (_String*, _String*, long, long, _SimpleList&, _Matrix*, _Parameter&, long);
 _String      ProcessStringArgument              (_String*);
 bool         RecurseDownTheTree                 (_SimpleList&, _List&, _List&, _List&, _SimpleList&);
-long         CodonAlignStringsStep              (_Matrix& ,_SimpleList& ,  _SimpleList& , long ,long ,long ,long ,_Parameter ,_Parameter ,_Parameter ,_Parameter ,_Parameter ,_Matrix *, _Matrix*, _Matrix*, _Matrix*, _Matrix*);
+// this is a ReplicateConstraint helper
+
+//____________________________________________________________________________________
+
+_HBLCommandExtras* _hyInitCommandExtras (const long cut, const long conditions, _String commandInvocation, const char sep, const bool doTrim, const bool isAssignment, const bool needsVerb, _SimpleList * conditionList) {
+    
+    struct _HBLCommandExtras * commandInfo           = new _HBLCommandExtras();
+    commandInfo->cut_string                          = cut;
+    if (conditions < 0 && conditionList) 
+        commandInfo->extract_conditions              << *conditionList;
+    else
+        commandInfo->extract_conditions              << conditions;
+    commandInfo->extract_condition_separator         = sep;
+    commandInfo->do_trim                             = doTrim;
+    commandInfo->is_assignment                       = isAssignment;
+    commandInfo->needs_verb                          = needsVerb;
+    commandInfo->command_invocation                  && & commandInvocation;
+
+    return                                             commandInfo;
+    
+}
+
+//____________________________________________________________________________________
+
+bool      _ElementaryCommand::ExtractValidateAddHBLCommand (_String& current_stream,const long command_code,  _List* pieces, _HBLCommandExtras* command_spec, _ExecutionList& command_list)
+
+{
+    if (command_spec->is_assignment) {
+        // TBA
+    } else {
+        // by default push all of the 'pieces' arguments to the "argument" list
+        _ElementaryCommand *cv = new _ElementaryCommand (command_code);
+        cv->addAndClean  (command_list, pieces, 0);        
+    }
+    
+    return true;
+}
+
 
 //____________________________________________________________________________________
 
@@ -133,6 +183,169 @@ void        _HBL_Init_Const_Arrays  (void)
     _HY_GetStringGlobalTypes.Insert(new _String("Tree"), 4);
     _HY_GetStringGlobalTypes.Insert(new _String("SCFG"), 5);
     _HY_GetStringGlobalTypes.Insert(new _String("Variable"), 6);
+
+
+    _HY_ValidHBLExpressions.Insert ("function ",                            HY_HBL_COMMAND_FUNCTION);
+    _HY_ValidHBLExpressions.Insert ("ffunction ",                           HY_HBL_COMMAND_FFUNCTION);
+    _HY_ValidHBLExpressions.Insert ("return ",                              HY_HBL_COMMAND_RETURNSPACE);
+    _HY_ValidHBLExpressions.Insert ("return(",                              HY_HBL_COMMAND_RETURNPAREN);
+    _HY_ValidHBLExpressions.Insert ("if(",                                  HY_HBL_COMMAND_IF);
+    _HY_ValidHBLExpressions.Insert ("else",                                 HY_HBL_COMMAND_ELSE);
+    _HY_ValidHBLExpressions.Insert ("do{",                                  HY_HBL_COMMAND_DO);
+    _HY_ValidHBLExpressions.Insert ("break;",                               HY_HBL_COMMAND_BREAK);
+    _HY_ValidHBLExpressions.Insert ("continue;",                            HY_HBL_COMMAND_CONTINUE);
+    _HY_ValidHBLExpressions.Insert ("#include",                             HY_HBL_COMMAND_INCLUDE);
+    _HY_ValidHBLExpressions.Insert ("DataSet ",                             HY_HBL_COMMAND_DATA_SET);
+    _HY_ValidHBLExpressions.Insert ("DataSetFilter ",                       HY_HBL_COMMAND_DATA_SET_FILTER);
+    _HY_ValidHBLExpressions.Insert ("ConstructCategoryMatrix(",				HY_HBL_COMMAND_CONSTRUCT_CATEGORY_MATRIX);
+    _HY_ValidHBLExpressions.Insert ("Tree ",                                HY_HBL_COMMAND_TREE);
+    _HY_ValidHBLExpressions.Insert ("LikelihoodFunction ",					HY_HBL_COMMAND_LIKELIHOOD_FUNCTION);
+    _HY_ValidHBLExpressions.Insert ("LikelihoodFunction3 ",					HY_HBL_COMMAND_LIKELIHOOD_FUNCTION_3);
+    _HY_ValidHBLExpressions.Insert ("MolecularClock(",                      HY_HBL_COMMAND_MOLECULAR_CLOCK);
+    _HY_ValidHBLExpressions.Insert ("fprintf(",                             HY_HBL_COMMAND_FPRINTF);
+    _HY_ValidHBLExpressions.Insert ("GetString(",                           HY_HBL_COMMAND_GET_STRING);
+    _HY_ValidHBLExpressions.Insert ("fscanf(",                              HY_HBL_COMMAND_FSCANF);
+    _HY_ValidHBLExpressions.Insert ("sscanf(",                              HY_HBL_COMMAND_SSCANF);
+    _HY_ValidHBLExpressions.Insert ("Export(",                              HY_HBL_COMMAND_EXPORT);
+    _HY_ValidHBLExpressions.Insert ("ReplicateConstraint(",					HY_HBL_COMMAND_REPLICATE_CONSTRAINT);
+    _HY_ValidHBLExpressions.Insert ("Import",                               HY_HBL_COMMAND_IMPORT);
+    _HY_ValidHBLExpressions.Insert ("category ",                            HY_HBL_COMMAND_CATEGORY);
+    _HY_ValidHBLExpressions.Insert ("ClearConstraints(",					HY_HBL_COMMAND_CLEAR_CONSTRAINTS);
+    _HY_ValidHBLExpressions.Insert ("SelectTemplateModel(",					HY_HBL_COMMAND_SELECT_TEMPLATE_MODEL);
+    _HY_ValidHBLExpressions.Insert ("UseModel(",                            HY_HBL_COMMAND_USE_MODEL);
+    _HY_ValidHBLExpressions.Insert ("Model ",                               HY_HBL_COMMAND_MODEL);
+    _HY_ValidHBLExpressions.Insert ("SetParameter(",                        HY_HBL_COMMAND_SET_PARAMETER);
+    _HY_ValidHBLExpressions.Insert ("ChoiceList(",                          HY_HBL_COMMAND_SET_CHOICE_LIST);
+    _HY_ValidHBLExpressions.Insert ("OpenDataPanel(",                       HY_HBL_COMMAND_OPEN_DATA_PANEL);
+    _HY_ValidHBLExpressions.Insert ("GetInformation(",                      HY_HBL_COMMAND_GET_INFORMATION);
+    _HY_ValidHBLExpressions.Insert ("ExecuteCommands(",                     HY_HBL_COMMAND_EXECUTE_COMMANDS);
+    _HY_ValidHBLExpressions.Insert ("ExecuteAFile(",                        HY_HBL_COMMAND_EXECUTE_A_FILE);
+    _HY_ValidHBLExpressions.Insert ("LoadFunctionLibrary(",					HY_HBL_COMMAND_LOAD_FUNCTION_LIBRARY);
+    _HY_ValidHBLExpressions.Insert ("OpenWindow(",                          HY_HBL_COMMAND_OPEN_WINDOW);
+    _HY_ValidHBLExpressions.Insert ("SpawnLikelihoodFunction(",				HY_HBL_COMMAND_SPAWN_LIKELIHOOD_FUNCTION);
+    _HY_ValidHBLExpressions.Insert ("Differentiate(",                       HY_HBL_COMMAND_DIFFERENTIATE);
+    _HY_ValidHBLExpressions.Insert ("FindRoot(",                            HY_HBL_COMMAND_FIND_ROOT);
+    _HY_ValidHBLExpressions.Insert ("MPIReceive(",                          HY_HBL_COMMAND_MPI_RECEIVE);
+    _HY_ValidHBLExpressions.Insert ("MPISend(",                             HY_HBL_COMMAND_MPI_SEND);
+    _HY_ValidHBLExpressions.Insert ("GetDataInfo(",                         HY_HBL_COMMAND_GET_DATA_INFO);
+    _HY_ValidHBLExpressions.Insert ("StateCounter(",                        HY_HBL_COMMAND_STATE_COUNTER);
+    _HY_ValidHBLExpressions.Insert ("Integrate(",                           HY_HBL_COMMAND_INTEGRATE);
+    _HY_ValidHBLExpressions.Insert ("GetURL(",                              HY_HBL_COMMAND_GET_URL);
+    _HY_ValidHBLExpressions.Insert ("DoSQL(",                               HY_HBL_COMMAND_DO_SQL);
+    _HY_ValidHBLExpressions.Insert ("Topology ",                            HY_HBL_COMMAND_TOPOLOGY);
+    _HY_ValidHBLExpressions.Insert ("AlignSequences(",                      HY_HBL_COMMAND_ALIGN_SEQUENCES);
+    _HY_ValidHBLExpressions.Insert ("GetNeutralNull(",                      HY_HBL_COMMAND_GET_NEUTRAL_NULL);
+    _HY_ValidHBLExpressions.Insert ("#profile",                             HY_HBL_COMMAND_PROFILE);
+    _HY_ValidHBLExpressions.Insert ("DeleteObject(",                        HY_HBL_COMMAND_DELETE_OBJECT);
+    _HY_ValidHBLExpressions.Insert ("RequireVersion(",                      HY_HBL_COMMAND_REQUIRE_VERSION);
+    _HY_ValidHBLExpressions.Insert ("SCFG ",                                HY_HBL_COMMAND_SCFG);
+    _HY_ValidHBLExpressions.Insert ("NeuralNet ",                           HY_HBL_COMMAND_NEURAL_NET);
+    _HY_ValidHBLExpressions.Insert ("BGM ",                                 HY_HBL_COMMAND_BGM);
+    _HY_ValidHBLExpressions.Insert ("SimulateDataSet",                      HY_HBL_COMMAND_SIMULATE_DATA_SET);
+    _HY_ValidHBLExpressions.Insert ("assert(",                              HY_HBL_COMMAND_ASSERT);      
+/*
+const long cut, const long conditions, const char sep, const bool doTrim, const bool isAssignment, const bool needsVerb, length options
+*/
+
+    _SimpleList lengthOptions;
+    _HY_HBLCommandHelper.Insert    ((BaseRef)HY_HBL_COMMAND_FOR, 
+                                    (long)_hyInitCommandExtras (_HY_ValidHBLExpressions.Insert ("for(", HY_HBL_COMMAND_FOR,false),3, "for (<initialization>;<condition>;<increment>) {loop body}"));
+
+    _HY_HBLCommandHelper.Insert    ((BaseRef)HY_HBL_COMMAND_WHILE,
+                                    (long)_hyInitCommandExtras (_HY_ValidHBLExpressions.Insert ("while(", HY_HBL_COMMAND_WHILE,false),1, "while (<condition>) {loop body}"));
+                                                            
+
+    _HY_HBLCommandHelper.Insert    ((BaseRef)HY_HBL_COMMAND_SET_DIALOG_PROMPT, 
+                                    (long)_hyInitCommandExtras (_HY_ValidHBLExpressions.Insert ("SetDialogPrompt(", HY_HBL_COMMAND_SET_DIALOG_PROMPT,false),
+                                    1, 
+                                    "SetDialogPrompt(<prompt string>);"));
+    
+    lengthOptions.Clear();lengthOptions.Populate (3,5,1);
+    _HY_HBLCommandHelper.Insert    ((BaseRef)HY_HBL_COMMAND_HARVEST_FREQUENCIES, 
+                                    (long)_hyInitCommandExtras (_HY_ValidHBLExpressions.Insert ("HarvestFrequencies(", HY_HBL_COMMAND_HARVEST_FREQUENCIES,false),
+                                    -1, 
+                                    "HarvestFrequencies(<receptacle>, <DataSet or DataSetFilter>, <atom INTEGER>, <unit INTEGER <= atom>, <position aware 0 or 1>, [optional site partion], [optional sequence partition] (only for DataSetArguments)",
+                                        ',',
+                                        true,
+                                        false,
+                                        false,
+                                        &lengthOptions));
+    
+    _HY_HBLCommandHelper.Insert    ((BaseRef)HY_HBL_COMMAND_OPTIMIZE, 
+                                    (long)_hyInitCommandExtras (_HY_ValidHBLExpressions.Insert ("Optimize(", HY_HBL_COMMAND_OPTIMIZE,false),
+                                                                2, 
+                                                                "Optimize (<receptacle>, <likelihood function/scfg/bgm>)",','));
+
+    _HY_HBLCommandHelper.Insert    ((BaseRef)HY_HBL_COMMAND_LFCOMPUTE, 
+                                    (long)_hyInitCommandExtras (_HY_ValidHBLExpressions.Insert ("LFCompute(", HY_HBL_COMMAND_LFCOMPUTE,false),
+                                                                2, 
+                                                                "LFCompute (<likelihood function/scfg/bgm>,<LF_START_COMPUTE|LF_DONE_COMPUTE|receptacle>)",','));
+
+
+    _HY_HBLCommandHelper.Insert    ((BaseRef)HY_HBL_COMMAND_COVARIANCE_MATRIX, 
+                                    (long)_hyInitCommandExtras (_HY_ValidHBLExpressions.Insert ("CovarianceMatrix(", HY_HBL_COMMAND_COVARIANCE_MATRIX,false),
+                                                                2, 
+                                                                "CovarianceMatrix (<receptacle>, <likelihood function/scfg/bgm>)",','));
+
+     
+    _HY_HBLCommandHelper.Insert    ((BaseRef)HY_HBL_COMMAND_SELECT_TEMPLATE_MODEL, 
+                                    (long)_hyInitCommandExtras (_HY_ValidHBLExpressions.Insert ("SelectTemplateModel(", HY_HBL_COMMAND_SELECT_TEMPLATE_MODEL,false),
+                                    1, 
+                                    "SelectTemplateModel(<DataSetFilter>);"));
+
+
+    _HY_HBLCommandHelper.Insert    ((BaseRef)HY_HBL_COMMAND_USE_MODEL, 
+                                    (long)_hyInitCommandExtras (_HY_ValidHBLExpressions.Insert ("UseModel(", HY_HBL_COMMAND_USE_MODEL,false),
+                                                                1, 
+                                                                "UseModel (<model ID>)",','));
+
+    _HY_HBLCommandHelper.Insert    ((BaseRef)HY_HBL_COMMAND_SET_PARAMETER, 
+                                    (long)_hyInitCommandExtras (_HY_ValidHBLExpressions.Insert ("SetParameter(", HY_HBL_COMMAND_SET_PARAMETER,false),
+                                                                3, 
+                                                                "SetParameter(<object>, <parameter index>, <value>)",','));
+
+
+    lengthOptions.Clear();lengthOptions.Populate (2,1,1);
+    _HY_HBLCommandHelper.Insert    ((BaseRef)HY_HBL_COMMAND_ASSERT, 
+                                    (long)_hyInitCommandExtras (_HY_ValidHBLExpressions.Insert ("assert(", HY_HBL_COMMAND_ASSERT,false),
+                                    -1, 
+                                    "assert (<statement>,[optional message on failure]>",
+                                        ',',
+                                        true,
+                                        false,
+                                        false,
+                                        &lengthOptions));
+
+
+    _HY_HBLCommandHelper.Insert    ((BaseRef)HY_HBL_COMMAND_REQUIRE_VERSION, 
+                                    (long)_hyInitCommandExtras (_HY_ValidHBLExpressions.Insert ("RequireVersion(", HY_HBL_COMMAND_REQUIRE_VERSION,false),
+                                                                1, 
+                                                                "RequireVersion (<version string>)",','));
+
+    _HY_HBLCommandHelper.Insert    ((BaseRef)HY_HBL_COMMAND_DELETE_OBJECT, 
+                                    (long)_hyInitCommandExtras (_HY_ValidHBLExpressions.Insert ("DeleteObject(", HY_HBL_COMMAND_DELETE_OBJECT,false),
+                                                                -1, 
+                                                                "DeleteObject(<object 1> [optional ,<object 2>, <object 3>, ..., <object N>])",','));
+    
+    _HY_HBLCommandHelper.Insert    ((BaseRef)HY_HBL_COMMAND_CLEAR_CONSTRAINTS, 
+                                    (long)_hyInitCommandExtras (_HY_ValidHBLExpressions.Insert ("ClearConstraints(", HY_HBL_COMMAND_CLEAR_CONSTRAINTS,false),
+                                                                -1, 
+                                                                "ClearConstraints(<object 1> [optional ,<object 2>, <object 3>, ..., <object N>])",','));
+
+    _HY_HBLCommandHelper.Insert    ((BaseRef)HY_HBL_COMMAND_MOLECULAR_CLOCK, 
+                                    (long)_hyInitCommandExtras (_HY_ValidHBLExpressions.Insert ("MolecularClock(", HY_HBL_COMMAND_MOLECULAR_CLOCK,false),
+                                                                -2, 
+                                                                "MolecularClock(tree or tree node, local variable 1 [optional ,<local variable 2>, ..., <local variable N>])",','));
+// matrix global arrays
+
+
+    _HY_MatrixRandomValidPDFs.Insert ("Dirichlet", _HY_MATRIX_RANDOM_DIRICHLET);
+    _HY_MatrixRandomValidPDFs.Insert ("Gaussian", _HY_MATRIX_RANDOM_GAUSSIAN);
+    _HY_MatrixRandomValidPDFs.Insert ("Wishart", _HY_MATRIX_RANDOM_WISHART);
+    _HY_MatrixRandomValidPDFs.Insert ("InverseWishart", _HY_MATRIX_RANDOM_INVERSE_WISHART);
+    _HY_MatrixRandomValidPDFs.Insert ("Multinomial", _HY_MATRIX_RANDOM_MULTINOMIAL);
+
+
 }
 
 //____________________________________________________________________________________
@@ -143,7 +356,7 @@ void         InsertVarIDsInList     (_AssociativeList* theList , _String theKey,
 
     if (varIDs.lLength) {
         _List     varNames;
-        for (long i=0; i < varIDs.lLength; i++) {
+        for (unsigned long i=0; i < varIDs.lLength; i++) {
             _Variable* v = LocateVar (varIDs.lData[i]);
             if (v) {
                 varNames << v->GetName();
@@ -166,7 +379,7 @@ void         InsertStringListIntoAVL    (_AssociativeList* theList , _String the
 
     if (stringsToPick.lLength) {
         _List     theNames;
-        for (long i=0; i < stringsToPick.lLength; i++) {
+        for (unsigned long i=0; i < stringsToPick.lLength; i++) {
             _String * v = (_String*)theStrings (stringsToPick.lData[i]);
             if (v) {
                 theNames << v;
@@ -302,43 +515,6 @@ bool    _ElementaryCommand::ConstructProfileStatement (_String&source, _Executio
     sp->addAndClean(target,&pieces,0);
     return true;
 }
-
-//____________________________________________________________________________________
-
-bool    _ElementaryCommand::ConstructDeleteObject (_String&source, _ExecutionList&target)
-// syntax: DeleteObject (object);
-{
-    _List pieces;
-    ExtractConditions (source,blDeleteObject.sLength,pieces,';');
-    if (pieces.lLength<1) {
-        WarnError (_String ("Expected syntax:")& blDeleteObject &"comma separated list of objects to delete)");
-        return false;
-    }
-    _ElementaryCommand *dobj = new _ElementaryCommand (59);
-    dobj->addAndClean(target,&pieces,0);
-    return true;
-}
-
-//____________________________________________________________________________________
-
-bool    _ElementaryCommand::ConstructRequireVersion (_String&source, _ExecutionList&target)
-// syntax: RequireVersion (stringObject);
-{
-
-    _List pieces;
-    ExtractConditions (source,blRequireVersion.sLength,pieces,';');
-
-    if (pieces.lLength != 1) {
-        WarnError (_String ("Expected syntax:")& blRequireVersion &"a string object with HyPhy version)");
-        return false;
-    }
-
-    _ElementaryCommand *rv = new _ElementaryCommand (60);
-    rv->addAndClean(target,&pieces,0);
-
-    return true;
-}
-
 
 
 //____________________________________________________________________________________
@@ -840,6 +1016,7 @@ void      _ElementaryCommand::ExecuteCase33 (_ExecutionList& chain)
                         return;
                     }
                 }
+                break;
             }
             case HY_BL_BGM: {
 #if defined __AFYP_REWRITE_BGM__
@@ -1143,93 +1320,6 @@ void      _ElementaryCommand::ExecuteCase54 (_ExecutionList& chain)
     }
 }
 
-//_________________________________________________________________________
-
-bool    ExpressionCalculator (void)
-{
-    _String data (StringFromConsole(false));
-
-#ifndef __UNIX__
-    if (terminateExecution) {
-        return false;
-    }
-    BufferToConsole (">");
-    StringToConsole (data);
-    BufferToConsole ("\n");
-#endif
-
-    if (data.sLength == 4) {
-        _String checkForExit (data);
-        checkForExit.LoCase();
-        if (checkForExit == _String ("exit")) {
-            return false;
-        }
-    }
-
-    _Formula  lhs,
-              rhs;
-
-    long       refV,
-               retCode = Parse(&lhs, data, refV, nil,nil);
-
-    if (!terminateExecution) {
-        if (retCode == HY_FORMULA_EXPRESSION) {
-            _PMathObj formRes = lhs.Compute();
-            if (!formRes) {
-                BufferToConsole ("NULL\n");
-            } else {
-                _String * objValue = (_String*)formRes->toStr();
-                StringToConsole (*objValue);
-                BufferToConsole ("\n");
-                DeleteObject    (objValue);
-            }
-        } else {
-            BufferToConsole ("NO RETURN VALUE\n");
-        }
-    }
-    terminateExecution = false;
-    return true;
-}
-
-//_________________________________________________________________________
-
-bool    PushFilePath (_String& pName)
-{
-    char c = GetPlatformDirectoryChar();
-
-    long    f = pName.FindBackwards(_String(c),0,-1);
-    if (f>=0) {
-        _String newP = pName.Cut(0,f);
-        pathNames && & newP;
-        pName.Trim (f+1,-1);
-        return true;
-    } else if (pathNames.lLength) {
-        pathNames && pathNames(pathNames.lLength-1);
-    } else {
-        pathNames && & empty;
-    }
-
-    return false;
-}
-
-//_________________________________________________________________________
-void   PopFilePath (void)
-{
-    pathNames.Delete (pathNames.lLength-1);
-}
-
-//_________________________________________________________________________
-void   ExecuteBLString (_String& BLCommand, _VariableContainer* theP)
-{
-    _ExecutionList ex;
-    if (theP) {
-        ex.SetNameSpace(*theP->GetName());
-    }
-    ex.BuildList   (BLCommand);
-    terminateExecution = false;
-    ex.Execute      ();
-    terminateExecution = false;
-}
 
 //____________________________________________________________________________________
 
@@ -1290,12 +1380,12 @@ void      _ElementaryCommand::ExecuteCase55 (_ExecutionList& chain)
 
                 if (charVector) {
                     for (long cc = 0; cc < charVector->theString->sLength; cc++)
-                        if (ccount.lData[charVector->theString->sData[cc]]>=0) {
+                        if (ccount.lData[(unsigned char)charVector->theString->sData[cc]]>=0) {
                             charCount = 0; // this is an error condition for
                             // duplicate characters in the string
                             break;
                         } else {
-                            ccount.lData[charVector->theString->sData[cc]] = cc;
+                            ccount.lData[(unsigned char)charVector->theString->sData[cc]] = cc;
                             charCount ++;
                         }
                 }
@@ -1324,23 +1414,38 @@ void      _ElementaryCommand::ExecuteCase55 (_ExecutionList& chain)
                         char        gapCharacter = '-';
                         _FString    *gapC = (_FString*)mappingTable->GetByKey (seqAlignGapChar, STRING);
 
-                        _Matrix     *codon3x2 = nil,
-                                     *codon3x1 = nil;
-
+                        _Matrix     *codon3x5 = nil,
+                                    *codon3x4 = nil,
+                                    *codon3x2 = nil,
+                                    *codon3x1 = nil;
 
                         if (doCodon) {
+                            codon3x5 = (_Matrix*)mappingTable->GetByKey (seqAlignGapCodon3x5, MATRIX);
+                            codon3x4 = (_Matrix*)mappingTable->GetByKey (seqAlignGapCodon3x4, MATRIX);
                             codon3x2 = (_Matrix*)mappingTable->GetByKey (seqAlignGapCodon3x2, MATRIX);
                             codon3x1 = (_Matrix*)mappingTable->GetByKey (seqAlignGapCodon3x1, MATRIX);
-                            if(codon3x2 && codon3x1 && codon3x2->GetHDim() == codonCount+1
-                                    && codon3x1->GetHDim() == codonCount+1
-                                    && codon3x2->GetVDim() == charCount*charCount*3
-                                    && codon3x1->GetVDim() == charCount*3) {
+                            if ( codon3x5 && codon3x4 && codon3x2 && codon3x1
+                              && codon3x5->GetHDim() == codonCount+1
+                              && codon3x4->GetHDim() == codonCount+1
+                              && codon3x2->GetHDim() == codonCount+1
+                              && codon3x1->GetHDim() == codonCount+1
+                              && codon3x5->GetVDim() == charCount*charCount*charCount*10
+                              && codon3x4->GetVDim() == charCount*charCount*charCount*4
+                              && codon3x2->GetVDim() == charCount*charCount*3
+                              && codon3x1->GetVDim() == charCount*3) {
+                                codon3x5 = (_Matrix*)codon3x5->ComputeNumeric();
+                                codon3x5 -> CheckIfSparseEnough(true);
+                                codon3x4 = (_Matrix*)codon3x4->ComputeNumeric();
+                                codon3x4 -> CheckIfSparseEnough(true);
                                 codon3x2 = (_Matrix*)codon3x2->ComputeNumeric();
                                 codon3x2 -> CheckIfSparseEnough(true);
                                 codon3x1 = (_Matrix*)codon3x1->ComputeNumeric();
                                 codon3x1-> CheckIfSparseEnough(true);
                             } else {
-                                errStr = seqAlignGapCodon3x2 & " or " & seqAlignGapCodon3x1 & " matrices are missing or have incorrect dimensions";
+                                errStr = ( seqAlignGapCodon3x5 & ", "
+                                         & seqAlignGapCodon3x4 & ", "
+                                         & seqAlignGapCodon3x2 & ", or "
+                                         & seqAlignGapCodon3x1 & " matrices are missing or have incorrect dimensions" );
                             }
 
                         }
@@ -1473,9 +1578,25 @@ void      _ElementaryCommand::ExecuteCase55 (_ExecutionList& chain)
                                     _Parameter    score = 0.0;
 
                                     if (doLinear == false) {
+                                        char * str1r = NULL,
+                                             * str2r = NULL;
                                         _List         store;
-                                        score = AlignStrings (str1,string2,ccount,scoreMatrix,gapCharacter,
-                                                              gapOpen,gapExtend,gapOpen2,gapExtend2,gapFrameshift,doLocal,doAffine,doCodon,store, charCount, codon3x2, codon3x1);
+                                        score = AlignStrings (str1->sData,string2->sData,str1r,str2r,ccount.lData,scoreMatrix->theData,scoreMatrix->GetVDim(),
+                                                              gapCharacter,gapOpen,gapExtend,gapOpen2,gapExtend2,gapFrameshift,doLocal,doAffine,doCodon,
+                                                              charCount, codon3x5->theData, codon3x4->theData, codon3x2->theData, codon3x1->theData);
+
+                                        if ( str1r && str2r ) {
+                                            _String * r_res = ( _String * ) checkPointer( new _String( str1r ) ),
+                                                    * q_res = ( _String * ) checkPointer( new _String( str2r ) );
+                                            delete [] str1r;
+                                            delete [] str2r;
+                                            r_res->Finalize();
+                                            q_res->Finalize();
+                                            store.AppendNewInstance( r_res );
+                                            store.AppendNewInstance( q_res );
+                                        } else
+                                            WarnError( "Internal Error in AlignStrings" );
+
                                         store.bumpNInst();
 
                                         if (store.lLength == 0) {
@@ -1489,7 +1610,7 @@ void      _ElementaryCommand::ExecuteCase55 (_ExecutionList& chain)
                                         }
                                     } else {
                                         _Matrix       scoreM        (string2->sLength+1,1,false,true),
-                                                      scoreM2        (string2->sLength+1,1,false,true),
+                                                      scoreM2       (string2->sLength+1,1,false,true),
                                                       gap1Matrix    (string2->sLength+1,1,false,true),
                                                       gap2Matrix    (string2->sLength+1,1,false,true),
                                                       gap1Matrix2   (string2->sLength+1,1,false,true),
@@ -2108,72 +2229,6 @@ void      _ElementaryCommand::ExecuteCase58 (_ExecutionList& chain)
 
 }
 
-//____________________________________________________________________________________
-
-void      _ElementaryCommand::ExecuteCase59 (_ExecutionList& chain)
-{
-    chain.currentCommand++;
-
-    for (long objCount = 0; objCount < parameters.lLength; objCount++) {
-        long      f;
-        if  ((f = FindLikeFuncName(AppendContainerName(*(_String*)parameters(objCount),chain.nameSpacePrefix))) >= 0) {
-            KillLFRecord (f,true);
-        }
-
-
-    }
-}
-
-//____________________________________________________________________________________
-
-void      _ElementaryCommand::ExecuteCase60 (_ExecutionList& chain)
-{
-    chain.currentCommand++;
-    _String theVersion = ProcessLiteralArgument ((_String*)parameters (0),chain.nameSpacePrefix);
-
-    if (__KERNEL__VERSION__.toNum() < theVersion.toNum()) {
-        WarnError (_String ("Current batch file requires at least version :")& theVersion &" of HyPhy. Please download an updated version from http://www.hyphy.org and try again.");
-    }
-}
-
-//____________________________________________________________________________________
-
-void      _ElementaryCommand::ExecuteCase65 (_ExecutionList& chain)
-{
-    chain.currentCommand++;
-
-    _String assertion (*(_String*)parameters(0));
-
-    _Formula rhs, lhs;
-    long     varRef;
-    if (Parse (&rhs,assertion,varRef,chain.nameSpacePrefix,&lhs) == HY_FORMULA_EXPRESSION) {
-        _PMathObj assertionResult = rhs.Compute();
-        if (assertionResult && assertionResult->ObjectClass () == NUMBER) {
-            if (CheckEqual(assertionResult->Value(),0.0)) {
-                _Parameter whatToDo;
-                checkParameter (assertionBehavior, whatToDo, 0.0);
-
-                _String errMsg;
-
-                if (parameters.lLength == 1) {
-                    errMsg = _String("Assertion '") & *(_String*)parameters(0) & "' failed.";
-                } else {
-                    errMsg = ProcessLiteralArgument((_String*)parameters(1),chain.nameSpacePrefix);
-                }
-
-                if (CheckEqual (whatToDo, 1.)) {
-                    StringToConsole (errMsg);
-                    NLToConsole();
-                    chain.GoToLastInstruction ();
-                } else {
-                    WarnError (errMsg);
-                }
-            }
-            return;
-        }
-    }
-    WarnError ("Assertion statement could not be computed or was not numeric.");
-}
 
 //____________________________________________________________________________________
 
@@ -2315,9 +2370,8 @@ void    _ElementaryCommand::ExecuteCase64 (_ExecutionList& chain)
 
             if (bgmIndex == bgmNamesList.lLength) {
                 // reached end of list without finding empty string, append new string
-                bgmList << bgm;
+                bgmList.AppendNewInstance(bgm);
                 bgmNamesList && (&bgmName);
-                DeleteObject (bgm);
             } else {
                 // replace empty string in list
                 bgmNamesList.Replace (bgmIndex, &bgmName, true);
@@ -2444,1329 +2498,6 @@ bool    _ElementaryCommand::ConstructBGM (_String&source, _ExecutionList&target)
 
 
 //____________________________________________________________________________________
-bool    _ElementaryCommand::ConstructAssert (_String&source, _ExecutionList&target)
-// syntax: assert (statement,message on failure)
-{
-
-    // extract arguments from remainder of HBL string
-    _List pieces;
-
-    ExtractConditions (source,blAssert.sLength,pieces,',');
-
-    if (pieces.lLength != 2 && pieces.lLength != 1) {
-        WarnError ("Expected: assert (statement,<message on failure>");
-        return false;
-    }
-
-    _ElementaryCommand * bgm = new _ElementaryCommand (65);
-    bgm->addAndClean(target,&pieces,0);
-    return true;
-}
-
-//____________________________________________________________________________________
-
-#define HY_ALIGN_STRINGS_111_111 0
-#define HY_ALIGN_STRINGS_111_000 1
-#define HY_ALIGN_STRINGS_000_111 2
-
-#define HY_ALIGN_STRINGS_111_011 3
-#define HY_ALIGN_STRINGS_111_110 4
-#define HY_ALIGN_STRINGS_111_001 5
-#define HY_ALIGN_STRINGS_111_100 6
-#define HY_ALIGN_STRINGS_111_101 7
-#define HY_ALIGN_STRINGS_111_010 8
-
-#define HY_ALIGN_STRINGS_110_111 9
-#define HY_ALIGN_STRINGS_011_111 10
-#define HY_ALIGN_STRINGS_001_111 11
-#define HY_ALIGN_STRINGS_100_111 12
-#define HY_ALIGN_STRINGS_101_111 13
-#define HY_ALIGN_STRINGS_010_111 14
-
-#define HY_ALIGN_STRINGS_111_1110 15
-#define HY_ALIGN_STRINGS_111_1101 16
-#define HY_ALIGN_STRINGS_111_1011 17
-#define HY_ALIGN_STRINGS_111_0111 18
-
-
-#define HY_ALIGNMENT_TYPES_COUNT 19
-
-
-
-//____________________________________________________________________________________
-long         CodonAlignStringsStep              (_Matrix& alignmentOptions,
-        _Matrix& scoreMatrix,
-        _SimpleList& encodedString1,
-        _SimpleList& encodedString2,
-        long r,
-        long c,
-        long colCount,
-        long charCount,
-        _Parameter gFrameshift,
-        _Parameter gopen,
-        _Parameter gopen2,
-        _Parameter gextend,
-        _Parameter gextend2,
-        _Matrix * ccost,
-        _Matrix * gapScore1,
-        _Matrix * gapScore2,
-        _Matrix * codon3x2,
-        _Matrix * codon3x1
-                                                )
-{
-    long       mIndex   = r*colCount+c,
-               mIndex2 = mIndex-3*colCount,
-               codon1 = -1,
-               codon2 = -1,
-               bigCharCount = ccost->GetVDim(),
-               rowCount    = scoreMatrix.GetHDim(),
-               offset3x2      = charCount * charCount * 3,
-               offset3x1      = charCount * 3;
-
-    for (long i = 0; i < HY_ALIGNMENT_TYPES_COUNT; i++) {
-        alignmentOptions.theData [i] = -A_LARGE_NUMBER;
-    }
-
-
-    if (r>=3) {
-        if (gapScore2) {
-            alignmentOptions.theData  [HY_ALIGN_STRINGS_111_000] = MAX(scoreMatrix.theData[mIndex2]-gopen2,gapScore2->theData[mIndex2]-((r>3)?gextend2:gopen2));
-            gapScore2->theData[mIndex]  = alignmentOptions.theData[HY_ALIGN_STRINGS_111_000];
-        } else {
-            alignmentOptions.theData  [HY_ALIGN_STRINGS_111_000] = scoreMatrix.theData[mIndex2]-gopen2;
-        }
-
-        codon1 = (encodedString1.lData[r-3]*charCount + encodedString1.lData[r-2])*charCount + encodedString1.lData[r-1];
-        if (codon1 < 0) {
-            codon1 = bigCharCount-1;
-        }
-    }
-
-    if (c>=3) {
-        if (gapScore1) {
-            alignmentOptions.theData  [HY_ALIGN_STRINGS_000_111] = MAX(scoreMatrix.theData[mIndex-3]-gopen,gapScore1->theData[mIndex-3]-((c>3)?gextend:gopen));
-            gapScore1->theData[mIndex]  = alignmentOptions.theData[HY_ALIGN_STRINGS_000_111];
-        } else {
-            alignmentOptions.theData  [HY_ALIGN_STRINGS_000_111] = scoreMatrix.theData[mIndex-3]-gopen;
-        }
-
-        codon2 = (encodedString2.lData[c-3]*charCount + encodedString2.lData[c-2])*charCount + encodedString2.lData[c-1];
-        if (codon2 < 0) {
-            codon2 = bigCharCount-1;
-        }
-    }
-
-
-    if (codon2 >= 0) {
-        if (codon1 >= 0) {
-            alignmentOptions[HY_ALIGN_STRINGS_111_111] = scoreMatrix.theData[mIndex2-3] + ccost->theData[codon1*bigCharCount+codon2];
-        }
-
-
-        if (r >= 2) {
-            long partialCodon = encodedString1.lData[r-2]*charCount + encodedString1.lData[r-1];
-            if (partialCodon >= 0) {
-                alignmentOptions.theData [HY_ALIGN_STRINGS_110_111] = scoreMatrix.theData[mIndex-3-2*colCount] + codon3x2->theData[codon2*offset3x2+partialCodon*3]   - (r<rowCount-1?gFrameshift:0);
-                alignmentOptions.theData [HY_ALIGN_STRINGS_101_111] = scoreMatrix.theData[mIndex-3-2*colCount] + codon3x2->theData[codon2*offset3x2+partialCodon*3+1] - gFrameshift;
-                alignmentOptions.theData [HY_ALIGN_STRINGS_011_111] = scoreMatrix.theData[mIndex-3-2*colCount] + codon3x2->theData[codon2*offset3x2+partialCodon*3+2] - (r>2?gFrameshift:0.);
-            }
-        }
-
-        long partialCodon1 =  encodedString1.lData[r-1];
-
-        if (partialCodon1 >= 0) {
-            alignmentOptions.theData [HY_ALIGN_STRINGS_100_111] = scoreMatrix.theData[mIndex-3-colCount] + codon3x1->theData[codon2*offset3x1+partialCodon1*3]   - 2*(r<rowCount-1?gFrameshift:0);
-            alignmentOptions.theData [HY_ALIGN_STRINGS_010_111] = scoreMatrix.theData[mIndex-3-colCount] + codon3x1->theData[codon2*offset3x1+partialCodon1*3+1] - 2*gFrameshift;
-            alignmentOptions.theData [HY_ALIGN_STRINGS_001_111] = scoreMatrix.theData[mIndex-3-colCount] + codon3x1->theData[codon2*offset3x1+partialCodon1*3+2] - (r>1?2*gFrameshift:0.);
-        }
-    }
-
-    if (codon1 >= 0) {
-        if (c >= 4) {
-            _Parameter          maxV[4]         = {-A_LARGE_NUMBER,-A_LARGE_NUMBER,-A_LARGE_NUMBER,-A_LARGE_NUMBER};
-
-            long codont [4] = { (encodedString2.lData[c-4]*charCount + encodedString2.lData[c-3])*charCount + encodedString2.lData[c-2],
-                                (encodedString2.lData[c-4]*charCount + encodedString2.lData[c-3])*charCount + encodedString2.lData[c-1],
-                                (encodedString2.lData[c-4]*charCount + encodedString2.lData[c-2])*charCount + encodedString2.lData[c-1],
-                                (encodedString2.lData[c-3]*charCount + encodedString2.lData[c-2])*charCount + encodedString2.lData[c-1]
-                              };
-
-            for (long k2 = 0; k2 < 4; k2++)
-                if (codont[k2] >= 0) {
-                    maxV[k2] = MAX(maxV[k2], ccost->theData[codon1*bigCharCount+codont[k2]]);
-                }
-
-            alignmentOptions.theData [HY_ALIGN_STRINGS_111_1110] = scoreMatrix.theData[mIndex2-4] + maxV[0] - gFrameshift;
-            alignmentOptions.theData [HY_ALIGN_STRINGS_111_1101] = scoreMatrix.theData[mIndex2-4] + maxV[1] - gFrameshift;
-            alignmentOptions.theData [HY_ALIGN_STRINGS_111_1011] = scoreMatrix.theData[mIndex2-4] + maxV[2] - gFrameshift;
-            alignmentOptions.theData [HY_ALIGN_STRINGS_111_0111] = scoreMatrix.theData[mIndex2-4] + maxV[3] - (c>4?gFrameshift:0);
-        }
-
-        if (c >= 2) {
-            long partialCodon = encodedString2.lData[c-2]*charCount + encodedString2.lData[c-1];
-            if (partialCodon >= 0) {
-                alignmentOptions.theData [HY_ALIGN_STRINGS_111_110] = scoreMatrix.theData[mIndex2-2] + codon3x2->theData[codon1*offset3x2+partialCodon*3] - (c<colCount-1?gFrameshift:0);
-                alignmentOptions.theData [HY_ALIGN_STRINGS_111_101] = scoreMatrix.theData[mIndex2-2] + codon3x2->theData[codon1*offset3x2+partialCodon*3+1] - gFrameshift;
-                alignmentOptions.theData [HY_ALIGN_STRINGS_111_011] = scoreMatrix.theData[mIndex2-2] + codon3x2->theData[codon1*offset3x2+partialCodon*3+2] - (c>2?gFrameshift:0.);
-            }
-        }
-        long partialCodon1 = encodedString2.lData[c-1];
-        if (partialCodon1 >= 0) {
-            alignmentOptions.theData [HY_ALIGN_STRINGS_111_100] = scoreMatrix.theData[mIndex2-1] + codon3x1->theData[codon1*offset3x1+partialCodon1*3]  - 2*(c<colCount-1?gFrameshift:0);
-            alignmentOptions.theData [HY_ALIGN_STRINGS_111_010] = scoreMatrix.theData[mIndex2-1] + codon3x1->theData[codon1*offset3x1+partialCodon1*3+1] - 2*gFrameshift;
-            alignmentOptions.theData [HY_ALIGN_STRINGS_111_001] = scoreMatrix.theData[mIndex2-1] + codon3x1->theData[codon1*offset3x1+partialCodon1*3+2] - (c>1?2*gFrameshift:0.);
-        }
-    }
-
-    long whichOne = 0;
-    _Parameter maxScore = -A_LARGE_NUMBER;
-    for (long k = 0; k < HY_ALIGNMENT_TYPES_COUNT; k++) {
-        if (alignmentOptions.theData[k] > maxScore) {
-            whichOne = k;
-            maxScore = alignmentOptions.theData[k];
-        }
-    }
-    scoreMatrix.theData[mIndex] = maxScore;
-    return whichOne;
-}
-
-
-//____________________________________________________________________________________
-
-_Parameter   AlignStrings   (_String* s1,_String* s2,_SimpleList& cmap,_Matrix* ccost,char gap,_Parameter gopen,_Parameter gextend,
-                             _Parameter gopen2,_Parameter gextend2, _Parameter gFrameshift,
-                             bool doLocal,bool doAffine,bool doCodon,_List& store, long charCount,
-                             _Matrix* codon3x2, _Matrix *codon3x1)
-{
-    _String *res1 = (_String*)checkPointer(new _String (s1->sLength+1, true)),
-             *res2 = (_String*)checkPointer(new _String (s2->sLength+1, true));
-
-    _Parameter   score = 0.;
-
-    const  long upto1 = s1->sLength,
-                upto2 = s2->sLength;
-
-    if (upto1) {
-        if (upto2) {
-            _SimpleList encodedString1 (s1->sLength),
-                        encodedString2 (s2->sLength);
-
-            if (doCodon) {
-                for (long k = 0; k < s1->sLength; k++) {
-                    encodedString1 << cmap.lData[s1->sData[k]];
-                }
-                for (long k = 0; k < s2->sLength; k++) {
-                    encodedString2 << cmap.lData[s2->sData[k]];
-                }
-            }
-
-            _Matrix             scoreMatrix (s1->sLength+1,s2->sLength+1, false, true),
-                                *gapScore1 = nil,
-                                 *gapScore2 = nil;
-
-            _SimpleList         editOps     (MAX(s1->sLength,s2->sLength));
-            long                colCount =  upto2+1;
-
-            if (doAffine) {
-                gapScore1 = (_Matrix*)checkPointer(new _Matrix (s1->sLength+1,s2->sLength+1, false, true)),
-                gapScore2 = (_Matrix*)checkPointer(new _Matrix (s1->sLength+1,s2->sLength+1, false, true));
-            }
-
-            if (!doLocal)
-                // initialize gap costs in first column and first row
-                // they are 0 for local alignments
-            {
-                if (doAffine) {
-                    _Parameter cost = -gopen;
-                    for (long k=1; k < colCount; k++, cost-=gextend) {
-                        scoreMatrix.theData[k] = cost;
-                        gapScore1->theData[k]  = cost;
-                        gapScore2->theData[k]  = cost;
-                    }
-
-                    cost = -gopen2;
-
-                    gapScore1->theData[0] = -gopen;
-                    gapScore2->theData[0] = -gopen2;
-
-                    for (long m=colCount; m < (s1->sLength+1)*colCount; m+=colCount, cost-=gextend2) {
-                        scoreMatrix.theData[m] = cost;
-                        gapScore1->theData [m] = cost;
-                        gapScore2->theData [m] = cost;
-                    }
-                } else {
-                    if (doCodon == false) {
-                        _Parameter cost = -gopen;
-                        for (long m=1; m < colCount; m++, cost-=gopen) {
-                            scoreMatrix.theData[m] = cost;
-                        }
-
-                        cost = -gopen2;
-                        for (long k=colCount; k < (s1->sLength+1)*colCount; k+=colCount, cost-=gopen2) {
-                            scoreMatrix.theData[k] = cost;
-                        }
-                    } else {
-                        _Parameter cost = -gopen;
-                        for (long m=1; m < colCount; m++, cost-=gopen) {
-                            scoreMatrix.theData[m] = cost - ((m%3!=1)?gFrameshift:0);
-                        }
-
-                        cost = -gopen2;
-                        long cc = 1;
-                        for (long k=colCount; k < (s1->sLength+1)*colCount; k+=colCount, cost-=gopen2, cc++) {
-                            scoreMatrix.theData[k] = cost - ((cc%3 != 1)?gFrameshift:0);
-                        }
-                    }
-                }
-            } else {
-                if (doAffine) {
-                    if (doCodon) {
-                        for (long m=1; m < colCount; m++) {
-                            gapScore2->theData[m] = -gopen2 - ((m%3!=1)?gFrameshift:0);
-                        }
-
-
-                        long cc = 1;
-
-                        for (long m=colCount; m < (s1->sLength+1)*colCount; m+=colCount,cc++) {
-                            gapScore1->theData[m] = -gopen - ((cc%3 != 1)?gFrameshift:0);
-                        }
-                    } else {
-                        for (long m=1; m < colCount; m++) {
-                            gapScore2->theData[m] = -gopen2;
-                        }
-                        for (long m=colCount; m < (s1->sLength+1)*colCount; m+=colCount) {
-                            gapScore1->theData[m] = -gopen;
-                        }
-                    }
-                }
-            }
-
-            if (doCodon) {
-
-                _Matrix alignmentOptions (HY_ALIGNMENT_TYPES_COUNT,1,false,true);
-                //_Matrix tracker          (upto1+1,upto2+1,false,true);
-
-
-                for (long r=1; r<=upto1; r++) {
-
-                    for (long c=1; c<=upto2; c++) {
-                        CodonAlignStringsStep
-                        (alignmentOptions,
-                         scoreMatrix,
-                         encodedString1,
-                         encodedString2,
-                         r,
-                         c,
-                         colCount,
-                         charCount,
-                         gFrameshift,
-                         gopen,
-                         gopen2,
-                         gextend,
-                         gextend2,
-                         ccost,
-                         gapScore1,
-                         gapScore2,
-                         codon3x2,
-                         codon3x1
-                        );
-                        //tracker.Store (r,c,id);
-                    }
-
-                }
-            } else {
-                if (doAffine) {
-                    long mapL = ccost->GetVDim();
-                    for (long r=1; r<=upto1; r++) {
-                        long      c1 = cmap.lData[s1->sData[r-1]];
-                        for (long c=1; c<=upto2; c++) {
-                            long       mIndex   = r*colCount+c,
-                                       mIndex2 = mIndex-colCount;
-
-                            _Parameter gscore1  = MAX(scoreMatrix.theData[mIndex2]-gopen2,gapScore2->theData[mIndex2]-((r>1)?gextend2:gopen2)),     // gap in 2nd
-                                       gscore2  = MAX(scoreMatrix.theData[mIndex-1]-gopen,gapScore1->theData[mIndex-1]-((c>1)?gextend:gopen)),    // gap in 1st
-                                       gscore3  = scoreMatrix.theData[mIndex2-1];
-
-
-                            if (c1>=0) {
-                                long       c2 = cmap.lData[s2->sData[c-1]];
-
-                                if (c2>=0) {
-                                    gscore3 += ccost->theData[c1*mapL+c2];
-                                }
-                            }
-
-                            scoreMatrix.theData[mIndex] = MAX(gscore1,MAX(gscore2,gscore3));
-                            gapScore2->theData[mIndex]  = gscore1;
-                            gapScore1->theData[mIndex]  = gscore2;
-                        }
-                    }
-                } else {
-                    for (long r=1; r<=upto1; r++) {
-                        long      c1 = cmap.lData[s1->sData[r-1]];
-                        for (long c=1; c<=upto2; c++) {
-                            _Parameter score1 = scoreMatrix.theData[(r-1)*colCount+c] - gopen2, // gap in 2nd
-                                       score2 = scoreMatrix.theData[r*colCount+c-1]   - gopen,  // gap in 1st
-                                       score3 = scoreMatrix.theData[(r-1)*colCount+c-1];
-
-                            if (c1>=0) {
-                                long       c2 = cmap.lData[s2->sData[c-1]];
-
-                                if (c2>=0) {
-                                    score3 += (*ccost)(c1,c2);
-                                }
-                            }
-
-                            scoreMatrix.theData[r*colCount+c] = MAX(score1,MAX(score2,score3));
-                        }
-                    }
-                }
-            }
-
-            long p1 = upto1,
-                 p2 = upto2;
-
-            if (doLocal) {
-                score = scoreMatrix.theData[(s1->sLength+1)*colCount-1];
-
-                for (long mc2=colCount-1; mc2<s1->sLength*colCount; mc2+=colCount)
-                    if (scoreMatrix.theData[mc2]>score) {
-                        score = scoreMatrix.theData[mc2];
-                        p1 = mc2/colCount;
-                    }
-
-                for (long mc=s1->sLength*colCount; mc<(s1->sLength+1)*colCount-1; mc++)
-                    if (scoreMatrix.theData[mc]>score) {
-                        score = scoreMatrix.theData[mc];
-                        p1 = s1->sLength;
-                        p2 = mc-s1->sLength*colCount;
-                    }
-
-                for (long mp = p1; mp<s1->sLength; mp++) {
-                    editOps << -1;
-                }
-                for (long mp2 = p2; mp2<s2->sLength; mp2++) {
-                    editOps << 1;
-                }
-
-            } else {
-                score = scoreMatrix.theData[(s1->sLength+1)*colCount-1];
-            }
-
-            // backtrack now
-
-            if (doCodon) {
-                _Matrix alignmentOptions (HY_ALIGNMENT_TYPES_COUNT,1,false,true);
-                while (p1 && p2) {
-                    if (p1 < 3 && p2 < 3) {
-                        break;
-                    }
-
-                    long code = CodonAlignStringsStep              (alignmentOptions,
-                                scoreMatrix,
-                                encodedString1,
-                                encodedString2,
-                                p1,
-                                p2,
-                                colCount,
-                                charCount,
-                                gFrameshift,
-                                gopen,
-                                gopen2,
-                                gextend,
-                                gextend2,
-                                ccost,
-                                gapScore1,
-                                gapScore2,
-                                codon3x2,
-                                codon3x1);
-
-                    BacktrackAlignCodon (editOps, p1,p2,code);
-
-
-                    // printf ("%ld %ld\n", p1, p2, "\n");
-                    if (p1 < 0 || p2 < 0) {
-                        WarnError ("Internal Error in AlignStrings");
-                        return -A_LARGE_NUMBER;
-                    }
-
-                    if (doAffine) {
-                        long  ci = p1*colCount+p2;
-                        if (code == HY_ALIGN_STRINGS_111_000) {
-                            while (p1 >= 3 && (scoreMatrix.theData[ci]-gopen2 <= gapScore2->theData[ci]-gextend2)) {
-                                p1-=3;
-                                editOps << -1;
-                                editOps << -1;
-                                editOps << -1;
-                                ci -= 3*colCount;
-                            }
-                        } else if (code == HY_ALIGN_STRINGS_000_111) {
-                            while (p2 >= 3 && (scoreMatrix.theData[ci]-gopen <= gapScore1->theData[ci]-gextend)) {
-                                p2-=3;
-                                editOps << 1;
-                                editOps << 1;
-                                editOps << 1;
-                                ci -= 3;
-                            }
-                        }
-                    }
-
-                }
-            } else {
-
-                if (doAffine) {
-                    while (p1 && p2) {
-                        _Parameter bscore[3] = {gapScore2->theData[p1*colCount+p2],
-                                                gapScore1->theData[p1*colCount+p2],
-                                                -A_LARGE_NUMBER
-                                               };
-
-
-                        {
-                            bscore[2] = scoreMatrix.theData[(p1-1)*colCount+p2-1];
-                            MismatchScore (s1,s2,p1,p2,cmap,ccost,bscore[2]);
-
-                            _Parameter maxScore = bscore[0];
-                            long       maxIndex = 0;
-
-                            for (long k = 1; k < 3; k++)
-                                if (bscore[k] > maxScore) {
-                                    maxScore = bscore[k];
-                                    maxIndex = k;
-                                }
-
-                            switch (maxIndex) {
-                            case 0: {
-                                long  ci = p1*colCount+p2;
-
-                                p1--;
-                                editOps << -1;
-                                while (p1 && (scoreMatrix.theData[ci-colCount]-gopen2 <= gapScore2->theData[ci-colCount]-gextend2)) {
-                                    p1--;
-                                    editOps << -1;
-                                    ci -= colCount;
-                                }
-                            }
-                            break;
-
-                            case 1: {
-                                long  ci = p1*colCount+p2;
-                                p2--;
-                                editOps << 1;
-                                while (p2 && (scoreMatrix.theData[ci-1]-gopen <= gapScore1->theData[ci-1]-gextend)) {
-                                    p2--;
-                                    editOps << 1;
-                                    ci --;
-                                }
-                            }
-                            break;
-
-                            case 2: {
-                                p1--;
-                                p2--;
-                                editOps << 0;
-                            }
-                            break;
-
-                            }
-                        }
-                    }
-                } else {
-
-                    while (p1 && p2) {
-                        _Parameter bscore1 = scoreMatrix.theData[(p1-1)*colCount+p2]-gopen2,
-                                   bscore2 = scoreMatrix.theData[p1*colCount+p2-1]-gopen,
-                                   bscore3 = scoreMatrix.theData[(p1-1)*colCount+p2-1];
-
-                        MismatchScore (s1,s2,p1,p2,cmap,ccost,bscore3);
-                        BacktrackAlign (editOps, p1,p2,bscore1,bscore2,bscore3);
-                    }
-
-                }
-            }
-            while (p1>0) {
-                p1--;
-                editOps << -1;
-            }
-
-            while (p2>0) {
-                p2--;
-                editOps << 1;
-            }
-
-            for (long eo = editOps.lLength-1; eo>=0; eo--)
-                switch (editOps.lData[eo]) {
-                case 0:
-                    (*res1) << s1->sData[p1++];
-                    (*res2) << s2->sData[p2++];
-                    break;
-                case 1:
-                case 2:
-                    (*res1) << gap;
-                    (*res2) << ((editOps.lData[eo]==1)?s2->sData[p2++]:tolower (s2->sData[p2++]));
-                    break;
-                case -1:
-                case -2:
-                    (*res2) << gap;
-                    (*res1) << ((editOps.lData[eo]==-1)?s1->sData[p1++]:tolower(s1->sData[p1++]));
-                    break;
-                }
-
-
-            _String     alignDebug ("alignScoreMatrix");
-            _Variable * ad = CheckReceptacle (&alignDebug, empty, false);
-            ad->SetValue (&scoreMatrix, true);
-            if (doAffine) {
-                _String     alignDebug ("alignScoreMatrixG1");
-                _Variable * ad = CheckReceptacle (&alignDebug, empty, false);
-                ad->SetValue (gapScore1, true);
-                alignDebug  = ("alignScoreMatrixG2");
-                ad = CheckReceptacle (&alignDebug, empty, false);
-                ad->SetValue (gapScore2, true);
-            }
-
-            DeleteObject (gapScore1);
-            DeleteObject (gapScore2);
-
-        } else {
-            (*res1) << *s1;
-            for (long s1i = 0; s1i < s1->sLength; s1i++) {
-                (*res2) << gap;
-            }
-
-            if (!doLocal)
-                if (doAffine) {
-                    return -gopen2-(s1->sLength-1)*gextend2;
-                } else {
-                    return s1->sLength*gopen2;
-                }
-        }
-    } else if (s2->sLength) {
-        (*res2) << *s2;
-        for (long s2i = 0; s2i < s2->sLength; s2i++) {
-            (*res1) << gap;
-        }
-
-        if (!doLocal)
-            if (doAffine) {
-                return -gopen-(s2->sLength-1)*gextend;
-            } else {
-                return s2->sLength*gopen;
-            }
-    }
-
-    res1->Finalize();
-    res2->Finalize();
-
-
-    /* verify the score */
-
-    /*long gap1c = 0,
-     gap2c = 0;
-
-     _Parameter scoreCheck = 0.;
-
-     for (long sp = 0; sp<res1->sLength; sp++)
-     {
-     char cs1 = res1->sData[sp],
-     cs2 = res2->sData[sp];
-
-     if (cs1 == gap)
-     {
-     if (gap1c)
-     scoreCheck -= gextend;
-     else
-     scoreCheck -= gopen;
-     gap2c = 0;
-     gap1c++;
-     }
-     else
-     if (cs2 == gap)
-     {
-     if (gap2c)
-     scoreCheck -= gextend2;
-     else
-     scoreCheck -= gopen2;
-     gap1c = 0;
-     gap2c++;
-     }
-     else
-     {
-     gap1c = 0;
-     gap2c = 0;
-     long code1 = cmap.lData[cs1],
-     code2 = cmap.lData[cs2];
-
-     if (code1 >=0 && code2 >=0 )
-     scoreCheck += (*ccost)(code1,code2);
-     }
-
-     }
-
-     char checkScore [256];
-     sprintf (checkScore, "\nScore check: %g\n", scoreCheck);
-     BufferToConsole (checkScore);*/
-
-    store.AppendNewInstance(res1);
-    store.AppendNewInstance(res2);
-
-    return score;
-}
-
-//____________________________________________________________________________________
-
-_Parameter      LinearSpaceAlign (_String *s1,                  // first string
-                                  _String *s2,                      // second string
-                                  _SimpleList& cmap,                // char -> position in scoring matrix mapper
-                                  _Matrix*    ccost,                // NxN matrix of edit distances on characters
-                                  _Parameter gopen,                 // the cost of opening a gap in sequence 1
-                                  _Parameter gextend,               // the cost of extending a gap in sequence 1 (ignored unless doAffine == true)
-                                  _Parameter gopen2,                // the cost of opening a gap in sequence 2
-                                  _Parameter gextend2,              // the cost of opening a gap in sequence 2   (ignored unless doAffine == true)
-                                  bool doLocal,                     // ignore prefix and suffix gaps
-                                  bool doAffine,                    // use affine gap penalties
-                                  _SimpleList& ops,                 // edit operations for the optimal alignment
-                                  _Parameter   scoreCheck,          // check the score of the alignment
-                                  long         from1,
-                                  long         to1,
-                                  long         from2,
-                                  long         to2,
-                                  _Matrix      **buffer,                // matrix storage,
-                                  char         parentGapLink,
-                                  char         *ha
-                                 )
-{
-    if (to2 == from2 || to1 == from1) {
-        return 0;
-    }
-
-    long                    midpoint = (from1 + to1)/2,
-                            span     = to2-from2,
-                            span1     = to1-from1;
-
-    if                      (span1 > 1) {
-        CostOnly                (s1,s2,from1,from2,midpoint,to2,false,false,cmap,ccost,gopen,gextend,gopen2,gextend2,doLocal,doAffine,*(buffer[0]), buffer[1], buffer[2], parentGapLink>=2, ha);
-        CostOnly                (s1,s2,midpoint,from2,to1,to2,true,true,  cmap,ccost,gopen,gextend,gopen2,gextend2,doLocal,doAffine,*(buffer[3]), buffer[4], buffer[5],   2*(parentGapLink%2), ha+s2->sLength+1);
-    } else {
-        CostOnly                (s1,s2,from1,from2,to1,to2,false,false,cmap,ccost,gopen,gextend,gopen2,gextend2,doLocal,doAffine,*(buffer[0]), buffer[1], buffer[2], (parentGapLink>=2), ha);
-    }
-
-    _Parameter maxScore = -1e100;
-    long       maxIndex = 0;
-    bool       gapLink  = false;
-    char       alignmentKind    = 0;
-
-    _Parameter    gapOffsetScore   = gopen2-gextend2;
-    if (!doAffine) {
-        if (span1 > 1) {
-            for (long k = 0; k <= span; k++) {
-                _Parameter currentScore = buffer[0]->theData[k] + buffer[3]->theData[span-k];
-                if (currentScore > maxScore) {
-                    maxScore = currentScore;
-                    maxIndex = k;
-                }
-            }
-        } else { // handle the case of a single row span correctly
-            for (long k = 0; k <= span; k++) {
-                _Parameter currentScore     = buffer[0]->theData[k];
-
-                if (!doLocal || to1 != s1->sLength) {
-                    currentScore -= gopen*(span-k);
-                }
-
-                if (currentScore > maxScore) {
-                    maxScore        = currentScore;
-                    alignmentKind   = ha[k];
-                    maxIndex = k;
-                }
-            }
-        }
-    } else {
-        if (span1 > 1) {
-            // two cases here: no-gap link
-            // or gap-to-gap link
-
-            for (long k = 0; k <= span; k++) {
-                _Parameter currentScoreNoGap    = buffer[0]->theData[k] + buffer[3]->theData[span-k],
-                           currentScoreWithGap2  = buffer[2]->theData[k] + buffer[5]->theData[span-k] + gapOffsetScore;
-
-
-                if (doAffine && ((from1 == 0 || from2==0) && k == 0 || (to1 == s1->sLength || to2 == s2->sLength) && k == span)) {
-                    currentScoreWithGap2 -= gapOffsetScore;
-                }
-
-                if (currentScoreNoGap > maxScore) {
-                    maxScore = currentScoreNoGap;
-                    maxIndex = k;
-                    gapLink  = false;
-                }
-                if (currentScoreWithGap2 > maxScore) {
-                    maxScore = currentScoreWithGap2;
-                    maxIndex = k;
-                    gapLink  = true;
-                }
-                /*printf ("[%d %d %d %d] (%d) %d %g %g: %g %g / %g %d\n", from1, to1, from2, to2, parentGapLink,  k,
-                        buffer[0]->theData[k],  buffer[3]->theData[span-k], buffer[2]->theData[k],  buffer[5]->theData[span-k],
-                        maxScore, maxIndex);*/
-
-            }
-
-        } else { // handle the case of a single row span correctly
-            if (parentGapLink == 1) {
-                maxIndex      = span;
-                maxScore      = buffer[2]->theData[span];
-                alignmentKind = 1;
-            } else {
-                for (long k = 0; k <= span; k++) {
-                    _Parameter currentScoreNoGap    = buffer[0]->theData[k],
-                               currentScoreWithGap2  = buffer[2]->theData[k];
-
-                    if (!doLocal || to1 != s1->sLength) // indel in sequence 1
-                        if (span-k) {
-                            currentScoreNoGap       -= gopen;
-                            currentScoreWithGap2    -= gopen;
-                            if (span-k>1) {
-                                currentScoreNoGap    -= gextend*(span-k-1);
-                                currentScoreWithGap2 -= gextend*(span-k-1);
-                            }
-                        }
-
-                    /*printf ("[%d %d %d %d] %d %g %g: %g %g / %g %d\n", from1, to1, from2, to2, k,
-                            buffer[0]->theData[k],  buffer[2]->theData[k], currentScoreNoGap, currentScoreWithGap2,
-                            maxScore, maxIndex);*/
-
-                    if (currentScoreNoGap > maxScore) {
-                        maxScore = currentScoreNoGap;
-                        maxIndex = k;
-                        alignmentKind   = ha[k];
-                    }
-                    if (currentScoreWithGap2 > maxScore) {
-                        maxScore = currentScoreWithGap2;
-                        maxIndex = k;
-                        alignmentKind   = 0;
-                    }
-                }
-            }
-        }
-    }
-
-    if (span1 == 1) {
-        if (alignmentKind == 2) {
-            ops.lData[from1+1] = from2+maxIndex-1;
-        } else if (alignmentKind == 0 && maxIndex == 0/*&& to2 == s2->sLength && to1 == s1->sLength*/) {
-            ops.lData[from1+1]  = -3;
-        }
-    } else {
-
-        _Parameter check1 = buffer[0]->theData[maxIndex],
-                   check2 = buffer[3]->theData[span-maxIndex];
-
-        if (span1>1) {
-            if (maxIndex > 0) {
-                char gapCode = gapLink;
-                if (parentGapLink >= 2) {
-                    gapCode += 2;
-                }
-                LinearSpaceAlign (s1,s2,cmap,ccost,gopen,gextend,gopen2,gextend2,doLocal,doAffine,ops,check1, from1, midpoint, from2, from2 + maxIndex, buffer, gapCode, ha);
-            } else if (from2 == 0)
-                for (long k = from1; k < midpoint; k++) {
-                    ops.lData[k+1] = -3;
-                }
-
-            if (maxIndex < span) {
-                char gapCode = 2*gapLink;
-                if (parentGapLink % 2 == 1) {
-                    gapCode ++;
-                }
-                LinearSpaceAlign (s1,s2,cmap,ccost,gopen,gextend,gopen2,gextend2,doLocal,doAffine,ops,check2, midpoint, to1, from2 + maxIndex, to2, buffer, gapCode, ha);
-            }
-        }
-    }
-    return maxScore;
-}
-
-//____________________________________________________________________________________
-
-#define _ALIGNMENT_NOLOCAL      0x00
-#define _ALIGNMENT_LOCAL_START  0x01
-#define _ALIGNMENT_LOCAL_END    0x02
-
-//____________________________________________________________________________________
-
-_Parameter   CostOnly   (_String* s1,               // first string
-                         _String* s2,               // second string
-                         long     from1,            // start here in string1
-                         long     from2,            // start here in string2
-                         long     to1,              // up to here in string1 // not inclusive
-                         long     to2,              // up to here in string2 // not inclusive
-                         bool     rev1,             // reverse string1
-                         bool     rev2,             // reverse string2
-                         _SimpleList& cmap,         // char -> position in scoring matrix mapper
-                         _Matrix* ccost,            // NxN matrix of edit distances on characters
-                         _Parameter gopen,          // the cost of opening a gap in sequence 1
-                         _Parameter gextend,        // the cost of extending a gap in sequence 1 (ignored unless doAffine == true)
-                         _Parameter gopen2,         // the cost of opening a gap in sequence 2
-                         _Parameter gextend2,       // the cost of opening a gap in sequence 2   (ignored unless doAffine == true)
-                         bool doLocal,              // ignore prefix and suffix gaps
-                         bool doAffine,             // use affine gap penalties
-                         _Matrix& scoreMatrix,      // where to write the last row of the scoring matrix
-                         _Matrix * gapScore1,       // where to write the last row of open gap in 1st sequence matrix (ignored unless doAffine == true)
-                         _Matrix * gapScore2,       // same but for open gap in 2nd sequence matrix
-                         char      secondGap,
-                         char   * howAchieved)
-{
-    _Parameter   score    = 0.;
-
-    long         s1Length = to1-from1,
-                 s2Length = to2-from2;
-
-
-    bool         doLocal1S = false,
-                 doLocal1E = false,
-                 doLocal2S = false,
-                 doLocal2E = false;
-
-    if (doLocal) {
-        if (rev1) {
-            doLocal1S = (to1==s1->sLength);
-            doLocal1E = from1 == 0;
-            //doLocal1 = (to1==s1->sLength)*_ALIGNMENT_LOCAL_START + (from1 == 0)*_ALIGNMENT_LOCAL_END;
-        } else {
-            doLocal1E = (to1==s1->sLength);
-            doLocal1S = from1 == 0;
-            //doLocal1 = (from1==0)*_ALIGNMENT_LOCAL_START + (to1==s1->sLength)*_ALIGNMENT_LOCAL_END;
-        }
-        if (rev2) {
-            doLocal2E = from2 == 0;
-            doLocal2S = (to2==s2->sLength);
-            //doLocal2 = (to2==s2->sLength)*_ALIGNMENT_LOCAL_START + (from2 == 0)*_ALIGNMENT_LOCAL_END;
-        } else {
-            doLocal2S = from2 == 0;
-            doLocal2E = (to2==s2->sLength);
-            //doLocal2 = (from2==0)*_ALIGNMENT_LOCAL_START + (to2==s2->sLength)*_ALIGNMENT_LOCAL_END;
-        }
-    }
-
-    if (s1Length)
-        // first string not empty
-    {
-        if (s2Length)
-            // second string not empty
-        {
-            _Parameter          aux2;
-            long                colCount = s2Length+1;
-
-            scoreMatrix.theData[0] = 0.;
-            if (doAffine) {
-                gapScore1->theData[0] = gapScore2->theData[0] = 0.;
-            }
-
-
-            if (doLocal1S == 0) {
-                _Parameter cost = -gopen;
-                if (doAffine) {
-                    for (long k=1; k < colCount; k++, cost-=gextend) {
-                        scoreMatrix.theData[k]  = cost;
-                        gapScore1->theData [k]  = cost;
-                        gapScore2->theData [k]  = cost;
-                    }
-                } else
-                    for (long m=1; m < colCount; m++, cost-=gopen) {
-                        scoreMatrix.theData[m] = cost;
-                    }
-            } else {
-                for (long k=1; k < colCount; k++) {
-                    scoreMatrix.theData[k] = 0.;
-                }
-
-                if (doAffine) {
-                    for (long k=1; k < colCount; k++) {
-                        gapScore1->theData[k] = 0;
-                        gapScore2->theData[k] = -(secondGap==1?gextend2:gopen2);
-                        // prefix gaps in the second sequence
-                    }
-                    gapScore1->theData[0] = -gopen;
-                }
-            }
-
-
-            long mapL = ccost->GetVDim(); // how many valid characters
-
-            if (doAffine) {
-                aux2 = 0.;
-
-                if (doLocal2S == 0) {
-                    gapScore1->theData[0] = gapScore2->theData[0] = -(secondGap==1?gextend2:gopen2);
-                }
-
-                from2 --;
-                from1 --;
-                for (long r=1; r<=s1Length; r++) { // iterate by rows
-                    long      c1 = cmap.lData[s1->sData[rev1?(to1-r):(from1+r)]];
-
-                    if (doLocal2S) {
-                        aux2        = 0.;
-                    } else {
-                        if (r>1) {
-                            aux2         = -((r-2)*gextend2 + (secondGap==1?gextend2:gopen2));
-                        }
-                        scoreMatrix.theData[0] = -((secondGap==1?gextend2:gopen2) + (r-1)*gextend2);
-                    }
-
-                    for (long c=1; c<=s2Length; c++) { // iterate by columns
-                        _Parameter gscore1  ,           // gap in 2nd
-                                   gscore2  ,           // gap in 1st
-                                   gscore3  = aux2,     // no gap
-                                   t;
-
-                        // if secondGap == 2, then we MUST _start_ with a gap in the 2nd sequence
-
-
-                        if (doLocal1E && r == s1Length) {
-                            //gscore2 = MAX(scoreMatrix.theData[c-1],gapScore1->theData[c-1]);
-                            gscore2 = scoreMatrix.theData[c-1];
-                            if (gapScore1->theData[c-1] > gscore2) {
-                                gscore2 = gapScore1->theData[c-1];
-                            }
-                        } else {
-                            gscore2 = scoreMatrix.theData[c-1]-gopen;
-                            t       = gapScore1->theData[c-1]-((c>1)?gextend:gopen);
-                            if (t > gscore2) {
-                                gscore2 = t;
-                            }
-                        }
-
-                        if (doLocal2E && c == s2Length) {
-                            //gscore1 = MAX(scoreMatrix.theData[c],gapScore2->theData[c]);
-                            gscore1 = scoreMatrix.theData[c];
-                            if (gscore1 < gapScore2->theData[c]) {
-                                gscore1 = gapScore2->theData[c];
-                            }
-                        } else {
-                            //gscore1 = MAX(scoreMatrix.theData[c]-gopen2,gapScore2->theData[c]-((r>1)?gextend2:gopen2));
-                            gscore1 = scoreMatrix.theData[c]-gopen2;
-                            t       = gapScore2->theData[c]-((r>1)?gextend2:gopen2);
-                            if (t > gscore1) {
-                                gscore1 = t;
-                            }
-                        }
-                        // either open a new gap from a character; or continue an existing one
-                        // if this is the second row, then we start a gap in the second sequence -|
-
-                        if (c1>=0) {
-                            long       c2 = cmap.lData[s2->sData[rev2?(to2-c):(from2+c)]];
-
-                            if (c2>=0) {
-                                gscore3 += ccost->theData[c1*mapL+c2];
-                            }
-                        }
-
-                        aux2                    = scoreMatrix.theData[c];
-                        char                      option = 0;
-                        t                       = gscore2;
-
-
-                        if (r > 1 || secondGap == 0) {
-                            if (gscore1 > gscore2) {
-                                t = gscore1;
-                                option                 = 1;
-                            }
-                            if (gscore3 > t) {
-                                t                      = gscore3;
-                                option                 = 2;
-                            }
-                        }
-                        scoreMatrix.theData[c] = t;
-                        if (howAchieved) {
-                            howAchieved[c] = option;
-                        }
-
-                        //if (rev2 && secondGap==2 && c == s2Length)
-                        //  gscore1 = MAX(scoreMatrix.theData[c]-gextend2,gapScore2->theData[c]-((r>1)?gextend2:gopen2));
-
-                        gapScore2->theData [c]  = gscore1;
-                        gapScore1->theData [c]  = gscore2;
-
-                    }
-
-                    if (doLocal2S && r < s1Length) {
-                        gapScore1->theData[0]-=gextend2;
-                        gapScore2->theData[0]-=gextend2;
-                    }
-                }
-            } else
-                // populate the cost matrix row by row
-            {
-                aux2 = 0.;
-                for (long r=1; r<=s1Length; r++) {
-                    if (doLocal2S) {
-                        aux2        = 0.;
-                    } else {
-                        scoreMatrix.theData[0] = -(gopen2 * r);
-                        if (r>1) {
-                            aux2         = -((r-1)*gopen2);
-                        }
-                    }
-
-                    //printf ("%d: %g\t", r, scoreMatrix.theData[0]);
-                    long      c1 = cmap.lData[s1->sData[rev1?(to1-r):(from1+r-1)]];
-
-                    for (long c=1; c<=s2Length; c++) {
-                        _Parameter score1 = scoreMatrix.theData[c], // gap in 2nd
-                                   score2 = scoreMatrix.theData[c-1],  // gap in 1st
-                                   score3 = aux2;
-
-                        if (c < s2Length || doLocal2E == 0) {
-                            score1 -= gopen2;
-                        }
-                        if (r < s1Length || doLocal1E == 0) {
-                            score2 -= gopen;
-                        }
-
-                        if (c1>=0) {
-                            long       c2 = cmap.lData[s2->sData[rev2?(to2-c):(from2+c-1)]];
-
-                            if (c2>=0) {
-                                score3 += ccost->theData[c1*mapL+c2];
-                            }
-                        }
-
-                        aux2                    = scoreMatrix.theData[c];
-                        char                    option = 0;
-                        scoreMatrix.theData[c]  = score1;
-                        if (score2 > score1) {
-                            scoreMatrix.theData[c] = score2;
-                            option                 = 1;
-                        }
-                        if (score3 > scoreMatrix.theData[c]) {
-                            scoreMatrix.theData[c] = score3;
-                            option                 = 2;
-                        }
-                        if (howAchieved) {
-                            howAchieved[c] = option;
-                        }
-                    }
-                    //printf ("\n");
-                }
-
-            }
-            score = scoreMatrix.theData[s2Length];
-        } else { // 2nd string empty
-            if ((doLocal2S || doLocal2E) == false) {
-                if (doAffine) {
-                    score = gopen2+gextend2*s1Length;
-                } else {
-                    score = gopen2 * s1Length;
-                }
-            }
-        }
-    } else // first string empty
-        if (s2Length) { // second string not empty
-            if ((doLocal1S || doLocal1E) == false) {
-                score = -gopen;
-
-                scoreMatrix.theData[0] = 0.0;
-                if (doAffine) {
-                    gapScore1->theData[0] = gapScore2->theData[0] = 0.0;
-                    for (long k = 1; k <= s2Length; k++, score-=gextend) {
-                        scoreMatrix.theData[k] = gapScore1->theData[k] = gapScore2->theData[k] = score;
-                    }
-
-                    score += gextend;
-                } else {
-                    for (long k = 1; k <= s2Length; k++, score-=gopen) {
-                        scoreMatrix.theData[k] = score;
-                    }
-                    score += gopen;
-                }
-            } else {
-                for (long k = 0; k <= s2Length; k++) {
-                    scoreMatrix.theData[k] = 0.;
-                }
-                if (doAffine)
-                    for (long k = 0; k <= s2Length; k++) {
-                        gapScore1->theData[k] = 0.;
-                        gapScore2->theData[k] = 0.;
-                    }
-            }
-
-        }
-
-    return score;
-}
-
-
-//____________________________________________________________________________________
-
-inline  void BacktrackAlign         (_SimpleList& editOps , long& p1, long& p2, _Parameter score1, _Parameter score2, _Parameter score3)
-{
-    if ((score1>=score2)&&(score1>=score3)) {
-        p1--;
-        editOps << -1;
-    } else {
-        if ((score2>=score1)&&(score2>=score3)) {
-            p2--;
-            editOps << 1;
-        } else {
-            p1--;
-            p2--;
-            editOps << 0;
-        }
-    }
-}
-
-//____________________________________________________________________________________
-
-inline  void BacktrackAlignCodon            (_SimpleList& editOps , long& p1, long& p2, long maxID)
-{
-
-    long   inStr1 [5] = {0,0,0,0,0},
-                        inStr2 [5] = {0,0,0,0,0},
-                                     idx        = 2;
-
-    bool   frameshift = true;
-
-    switch (maxID) {
-    case HY_ALIGN_STRINGS_111_111:
-        inStr1[0] = inStr1[1] = inStr1[2] = 1;
-        inStr2[0] = inStr2[1] = inStr2[2] = 1;
-        frameshift = false;
-        break;
-    case HY_ALIGN_STRINGS_111_000:
-        inStr1[0] = inStr1[1] = inStr1[2] = 1;
-        frameshift = false;
-        break;
-    case HY_ALIGN_STRINGS_000_111:
-        inStr2[0] = inStr2[1] = inStr2[2] = 1;
-        frameshift = false;
-        break;
-    case HY_ALIGN_STRINGS_111_101:
-        inStr1[0] = inStr1[1] = inStr1[2] = 1;
-        inStr2[0] = inStr2[2] = 1;
-        break;
-    case HY_ALIGN_STRINGS_111_110:
-        inStr1[0] = inStr1[1] = inStr1[2] = 1;
-        inStr2[0] = inStr2[1] = 1;
-        break;
-    case HY_ALIGN_STRINGS_111_011:
-        inStr1[0] = inStr1[1] = inStr1[2] = 1;
-        inStr2[1] = inStr2[2] = 1;
-        break;
-    case HY_ALIGN_STRINGS_110_111:
-        inStr2[0] = inStr2[1] = inStr2[2] = 1;
-        inStr1[0] = inStr1[1] = 1;
-        break;
-    case HY_ALIGN_STRINGS_101_111:
-        inStr2[0] = inStr2[1] = inStr2[2] = 1;
-        inStr1[0] = inStr1[2] = 1;
-        break;
-    case HY_ALIGN_STRINGS_011_111:
-        inStr2[0] = inStr2[1] = inStr2[2] = 1;
-        inStr1[1] = inStr1[2] = 1;
-        break;
-    case HY_ALIGN_STRINGS_111_001:
-        inStr1[0] = inStr1[1] = inStr1[2] = 1;
-        inStr2[2] = 1;
-        break;
-    case HY_ALIGN_STRINGS_111_010:
-        inStr1[0] = inStr1[1] = inStr1[2] = 1;
-        inStr2[1] = 1;
-        break;
-    case HY_ALIGN_STRINGS_111_100:
-        inStr1[0] = inStr1[1] = inStr1[2] = 1;
-        inStr2[0] = 1;
-        break;
-    case HY_ALIGN_STRINGS_100_111:
-        inStr2[0] = inStr2[1] = inStr2[2] = 1;
-        inStr1[0] = 1;
-        break;
-    case HY_ALIGN_STRINGS_010_111:
-        inStr2[0] = inStr2[1] = inStr2[2] = 1;
-        inStr1[1] = 1;
-        break;
-    case HY_ALIGN_STRINGS_001_111:
-        inStr2[0] = inStr2[1] = inStr2[2] = 1;
-        inStr1[2] = 1;
-        break;
-
-    case HY_ALIGN_STRINGS_111_1110:
-        inStr2[0] = inStr2[1] = inStr2[2] = inStr2[3] = 1;
-        inStr1[0] = inStr1[1] = inStr1[2] = 1;
-        idx = 3;
-        break;
-
-    case HY_ALIGN_STRINGS_111_1101:
-        inStr2[0] = inStr2[1] = inStr2[2] = inStr2[3] = 1;
-        inStr1[0] = inStr1[1] = inStr1[3] = 1;
-        idx = 3;
-        break;
-
-    case HY_ALIGN_STRINGS_111_1011:
-        inStr2[0] = inStr2[1] = inStr2[2] = inStr2[3] = 1;
-        inStr1[0] = inStr1[2] = inStr1[3] = 1;
-        idx = 3;
-        break;
-
-    case HY_ALIGN_STRINGS_111_0111:
-        inStr2[0] = inStr2[1] = inStr2[2] = inStr2[3] = 1;
-        inStr1[1] = inStr1[2] = inStr1[3] = 1;
-        idx = 3;
-        break;
-    }
-    for (long k = idx; k >= 0 ; k--) {
-        if (inStr1[k]) {
-            if (inStr2[k]) {
-                p1--;
-                p2--;
-                editOps << 0;
-            } else {
-                p1--;
-                editOps << -(frameshift?2:1);
-            }
-        } else {
-            p2--;
-            editOps << (frameshift?2:1);
-        }
-    }
-}
-
-
-//____________________________________________________________________________________
-
-inline  void MismatchScore          (_String* s1, _String*s2 , long p1, long p2, _SimpleList& cmap, _Matrix* ccost, _Parameter& score)
-{
-    long      c1 = cmap.lData[s1->sData[p1-1]];
-    if (c1>=0) {
-        long       c2 = cmap.lData[s2->sData[p2-1]];
-
-        if (c2>=0) {
-            score += (*ccost)(c1,c2);
-        }
-    }
-}
-
-//____________________________________________________________________________________
-
-inline  void MismatchScoreCodon      (_String* s1, _String*s2 , long p1, long p2, _SimpleList& cmap, _Matrix* ccost, _Parameter& score, long charCount)
-{
-    long      c1[3], c2[3];
-
-    for (long k = 1; k <= 3; k++) {
-        c1[3-k] = cmap.lData[s1->sData[p1-k]];
-        c2[3-k] = cmap.lData[s2->sData[p2-k]];
-        if (c1[3-k] < 0 || c2[3-k] < 0) {
-            return;
-        }
-    }
-
-    score += (*ccost)(c1[2]+charCount*(c1[1]+charCount*c1[0]),
-                      c2[2]+charCount*(c2[1]+charCount*c2[0]));
-
-
-}
-
-//____________________________________________________________________________________
 
 void    RetrieveModelComponents (long mid, _Matrix*& mm, _Matrix*& fv, bool & mbf)
 {
@@ -3835,7 +2566,44 @@ void    ScanModelForVariables        (long modelID, _AVLList& theReceptacle, boo
 
 //____________________________________________________________________________________
 
-BaseRef _HYRetrieveBLObjectByName    (_String& name, long& type, long *index)
+_String _HYHBLTypeToText (long type) {
+    _String result (128L,true);
+    if (type & HY_BL_DATASET) {
+        result << "DataSet|";
+    }
+    
+    if (type & HY_BL_DATASET_FILTER) {
+        result << "DataSetFilter|";
+    }
+    
+    if (type & HY_BL_LIKELIHOOD_FUNCTION) {
+        result << "LikelihoodFunction|";
+    }
+    
+    if (type & HY_BL_SCFG) {
+        result << "SCFG|";
+    }
+    
+    if (type & HY_BL_BGM) {
+        result << "BGM|";
+    }
+    
+    if (type & HY_BL_MODEL) {
+        result << "Model|";
+    }
+    
+    if (type & HY_BL_HBL_FUNCTION) {
+        result << "function|";
+    }
+    
+    result.Finalize();
+    result.Trim (0,result.sLength-2);
+    return result;
+}
+
+//____________________________________________________________________________________
+
+BaseRef _HYRetrieveBLObjectByName    (_String& name, long& type, long *index, bool errMsg, bool tryLiteralLookup)
 {
     long loc = -1;
     if (type & HY_BL_DATASET) {
@@ -3885,7 +2653,7 @@ BaseRef _HYRetrieveBLObjectByName    (_String& name, long& type, long *index)
     if (type & HY_BL_BGM) {
         loc = FindBgmName (name);
         if (loc >= 0) {
-            type = HY_BL_SCFG;
+            type = HY_BL_BGM;
             if (index) {
                 *index = loc;
             }
@@ -3917,7 +2685,16 @@ BaseRef _HYRetrieveBLObjectByName    (_String& name, long& type, long *index)
             return batchLanguageFunctions (loc);
         }
     }
+    
+    if (tryLiteralLookup) {
+        _String nameIDRef = ProcessLiteralArgument(&name, nil);
+        return _HYRetrieveBLObjectByName (nameIDRef, type, index, errMsg, false);
+    }
 
+    if (errMsg) {
+        WarnError (_String ("'") & name & "' does not refer to an existing object of type " & _HYHBLTypeToText (type));
+    }
+    type = HY_BL_NOT_DEFINED;
     return nil;
 }
 

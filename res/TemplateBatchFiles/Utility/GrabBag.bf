@@ -68,21 +68,46 @@ function avlToString (_gb_anAVL,_gb_delim)
 /*---------------------------------------------------------*/
 /* Stratify avl by values; store indices for each unique value */
 
+function stratifyAVLByValuesAux (key,value)
+{
+	if (Abs (_gb_resAVL[value]) == 0)
+	{
+		_gb_resAVL[value] = {};
+	}
+	
+	_gb_resAVL[value] + key;
+	
+	return 0;
+	
+}
+
 function stratifyAVLByValues (_gb_anAVL)
 {
 	_gb_count	  = Abs (_gb_anAVL);
 	_gb_resAVL	  = {};
-	for (_gb_idx = 0; _gb_idx < _gb_count; _gb_idx = _gb_idx + 1)
+	_gb_anAVL["stratifyAVLByValuesAux"][""];
+	return _gb_resAVL;
+}
+
+/*---------------------------------------------------------*/
+/* Stratify a matrix by values; store indices for each unique value */
+
+function stratifyMatrixByValues (_gb_aMatrix)
+{
+	_gb_count	  = Rows (_gb_aMatrix)*Columns(_gb_aMatrix);
+	_gb_resAVL	  = {};
+	for (_gb_idx = 0; _gb_idx < _gb_count; _gb_idx += 1)
 	{
-		_gb_key = _gb_anAVL[_gb_idx];
+		_gb_key = _gb_aMatrix[_gb_idx];
 		if (Abs (_gb_resAVL[_gb_key]) == 0)
 		{
 			_gb_resAVL[_gb_key] = {};
 		}
-		(_gb_resAVL[_gb_key])[Abs(_gb_resAVL[_gb_key])] = _gb_idx;
+		(_gb_resAVL[_gb_key]) + _gb_idx;
 	}
 	return _gb_resAVL;
 }
+
 
 /*---------------------------------------------------------*/
 /* Assuming that the AVL is 0..N indexed, produce a 
@@ -871,3 +896,54 @@ function remapSequenceCoordinatesToReference (ref,seq)
 	}
 	return _coordMap;
 }
+
+/*---------------------------------------------------------------------*/
+
+function runModule (module,options,suppressStdout)
+{
+	if (suppressStdout)
+	{
+		_gfr = GLOBAL_FPRINTF_REDIRECT;
+		GLOBAL_FPRINTF_REDIRECT = "/dev/null";
+	}
+	LoadFunctionLibrary (module,options);
+	if (suppressStdout)
+	{
+		GLOBAL_FPRINTF_REDIRECT = _gfr;
+	}
+}
+
+/*---------------------------------------------------------------------*/
+
+function _formatTimeString (secondCount)
+{
+	_hours = secondCount $3600;
+	if (_hours < 10)
+	{
+		_timeString = "0"+_hours;
+	}
+	else
+	{
+		_timeString = ""+_hours;
+	}
+	_minutes = (secondCount%3600)$60;
+	if (_minutes < 10)
+	{
+		_timeString = _timeString+":0"+_minutes;
+	}
+	else
+	{
+		_timeString = _timeString+":"+_minutes;
+	}
+	_seconds = (secondCount%60);
+	if (_seconds < 10)
+	{
+		_timeString = _timeString+":0"+_seconds;
+	}
+	else
+	{
+		_timeString = _timeString+":"+_seconds;
+	}
+	return _timeString;
+}	
+

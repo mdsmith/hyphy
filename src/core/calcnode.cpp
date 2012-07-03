@@ -6,19 +6,24 @@ Copyright (C) 1997-2009
   Sergei L Kosakovsky Pond (spond@ucsd.edu)
   Art FY Poon              (apoon@cfenet.ubc.ca)
 
-This program is free software; you can redistribute it and/or
-modify it under the terms of the GNU General Public License
-as published by the Free Software Foundation; either version 2
-of the License, or (at your option) any later version.
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 */
 
@@ -246,7 +251,10 @@ void    _CalcNode::InitializeCN     ( _String& parms, int, _VariableContainer* t
     if (iVariables) {
         for (f = iVariables->lLength-2; f>=0 && iVariables->lData[f+1] >= 0; f-=2) {
             _Variable *theV = LocateVar(iVariables->lData[f+1]);
-            if (theV->IsCategory()) {
+            if (theV->IsCategory()) { 
+                        /* this has to do with local category variables; 
+                           NOT TESTED and could be BROKEN
+                        */
                 _CategoryVariable* theCV = (_CategoryVariable*)theV;
 
                 _Formula           newDensity,
@@ -317,6 +325,13 @@ void    _CalcNode::InitializeCN     ( _String& parms, int, _VariableContainer* t
     DeleteObject(temp);
 
 }
+
+//__________________________________________________________________________________
+void    _CalcNode::SetModel (long modelID, _AVLListXL* varCache)
+{
+   _VariableContainer::SetModel (modelID, varCache);
+}
+
 //_______________________________________________________________________________________________
 
 long      _CalcNode::SetDependance (long varIndex)
@@ -1253,7 +1268,8 @@ bool    _TreeTopology::MainTreeConstructor  (_String& parms, bool checkNames)
 
     _String     nodeName,
                 nodeParameters,
-                nodeValue;
+                nodeValue,
+                nodeComment;
 
     char        lastChar    = 0;
     bool        isInLiteral = false;
@@ -1310,7 +1326,7 @@ bool    _TreeTopology::MainTreeConstructor  (_String& parms, bool checkNames)
                 return false;
             }
             parentNode = (node<long>*)nodeStack(lastNode);
-            FinalizeNode (parentNode, nodeNumbers(lastNode), nodeName, nodeParameters, nodeValue);
+            FinalizeNode (parentNode, nodeNumbers(lastNode), nodeName, nodeParameters, nodeValue, &nodeComment);
             nodeStack.Delete(lastNode, false);
             nodeNumbers.Delete(lastNode, false);
 
@@ -1342,6 +1358,18 @@ bool    _TreeTopology::MainTreeConstructor  (_String& parms, bool checkNames)
             break;
         }
 
+         case '[' : { // hackish Newick annotation
+            lastNode = parms.Find ("]",i+1,-1);
+            if (lastNode<0) {
+                WarnError ((_String("'[' has no matching ']':")&parms.Cut(i>31?i-32:0,i)&"?"&parms.Cut(i+1,parms.sLength-i>32?i+32:-1)));
+                isDefiningATree = false;
+                return false;
+            }
+            nodeComment = parms.Cut (i+1,lastNode-1);
+            i = lastNode;
+            break;
+        }
+        
         case ':' : { // tree branch definition
             lastNode = i+1;
             char c = parms[lastNode];
@@ -1354,7 +1382,7 @@ bool    _TreeTopology::MainTreeConstructor  (_String& parms, bool checkNames)
                 }
 
             if ( lastNode<parms.sLength )
-                while ( c<='9'&& c>='0' || c=='.' ||c=='-' ||c=='+' || c=='e' || c=='E') {
+                while ( (c<='9' && c>='0') || c=='.' ||c=='-' ||c=='+' || c=='e' || c=='E') {
                     if (lastNode<parms.sLength) {
                         c = parms[++lastNode];
                     } else {
@@ -1443,7 +1471,7 @@ bool    _TreeTopology::MainTreeConstructor  (_String& parms, bool checkNames)
 
     while (lastNode>=0) {
         parentNode = (node<long>*)nodeStack(lastNode);
-        FinalizeNode (parentNode, nodeNumbers(lastNode), nodeName, nodeParameters, nodeValue);
+        FinalizeNode (parentNode, nodeNumbers(lastNode), nodeName, nodeParameters, nodeValue, &nodeComment);
         lastNode--;
     }
 
@@ -1460,13 +1488,18 @@ bool    _TreeTopology::MainTreeConstructor  (_String& parms, bool checkNames)
 //_______________________________________________________________________________________________
 
 
-bool    _TheTree::FinalizeNode (node<long>* nodie, long number , _String& nodeName, _String& nodeParameters, _String& nodeValue)
+bool    _TheTree::FinalizeNode (node<long>* nodie, long number , _String& nodeName, _String& nodeParameters, _String& nodeValue, _String* nodeComment)
 {
     bool isAutoGenerated = (nodeName.sLength == 0);
     if (isAutoGenerated) {
         nodeName = iNodePrefix & number;
+    } else {
+        if (!nodeName.IsValidIdentifier(false)) {
+            _String oldName (nodeName);
+            nodeName.ConvertToAnIdent();
+            ReportWarning (_String ("Automatically renamed ") & oldName & " to " & nodeName & " in order to create a valid HyPhy identifier");
+        }
     }
-
     if (nodie == theRoot) {
         nodeParameters = empty;
         nodeValue      = empty;
@@ -1490,6 +1523,7 @@ bool    _TheTree::FinalizeNode (node<long>* nodie, long number , _String& nodeNa
 
 
     _Constant val (nodeValue.ProcessTreeBranchLength());
+    
     if (nodeValue.Length() && takeBranchLengths) {
         if (cNt.iVariables && cNt.iVariables->lLength == 2) { // can assign default values
             bool setDef = true;
@@ -1505,9 +1539,9 @@ bool    _TheTree::FinalizeNode (node<long>* nodie, long number , _String& nodeNa
                         _String * result = ((_Matrix*)tV->GetValue())->BranchLengthExpression((_Matrix*)tV2->GetValue(),mByF);
                         if (result->sLength) {
                             expressionToSolveFor = new _Formula (*result);
-                            for (long cc = 0; cc < cNt.categoryVariables.lLength; cc++) {
+                            for (unsigned long cc = 0; cc < cNt.categoryVariables.lLength; cc++) {
                                 _CategoryVariable * thisCC = (_CategoryVariable *)LocateVar(cNt.categoryVariables.lData[cc]);
-                                thisCC -> SetNumericValue (thisCC->Mean());
+                                thisCC -> SetValue (new _Constant(thisCC->Mean()), false);
 
                             }
                         }
@@ -1542,6 +1576,12 @@ bool    _TheTree::FinalizeNode (node<long>* nodie, long number , _String& nodeNa
     nodeName       = empty;
     nodeParameters = empty;
     nodeValue      = empty;
+    if (nodeComment && nodeComment->sLength)
+    {
+        _String commentName = *nodeVar->GetName() & "._comment";
+        CheckReceptacleAndStore(&commentName, empty, false, new _FString (*nodeComment));
+        *nodeComment    = empty;
+    }
 
     nodeVar->categoryVariables.TrimMemory();
     nodeVar->categoryIndexVars.TrimMemory();
@@ -1553,7 +1593,7 @@ bool    _TheTree::FinalizeNode (node<long>* nodie, long number , _String& nodeNa
 
 //_______________________________________________________________________________________________
 
-bool    _TreeTopology::FinalizeNode (node<long>* nodie, long number , _String& nodeName, _String& nodeParameters, _String& nodeValue)
+bool    _TreeTopology::FinalizeNode (node<long>* nodie, long number , _String& nodeName, _String& nodeParameters, _String& nodeValue, _String* nodeComment)
 {
     if (!nodeName.sLength) {
         nodeName = iNodePrefix & number;
@@ -1573,6 +1613,8 @@ bool    _TreeTopology::FinalizeNode (node<long>* nodie, long number , _String& n
     nodeName       = empty;
     nodeParameters = empty;
     nodeValue      = empty;
+    if (nodeComment)
+        *nodeComment    = empty;
 
     return true;
 }
@@ -3950,6 +3992,7 @@ _PMathObj _TreeTopology::BranchLength (_PMathObj p)
                                 _String bl;
                                 GetBranchLength (n1, bl, true);
                                 if (bl.sLength) {
+                                    DeleteObject(twoIDs);
                                     return new _FString (bl);
                                 }
                             }
@@ -5442,7 +5485,7 @@ long    _TheTree::CountTreeCategories (void)
         cVA.ReorderList   ();
     }
     categoryCount = 1;
-    for (long k=0; k<categoryVariables.lLength; k++) {
+    for (unsigned long k=0; k<categoryVariables.lLength; k++) {
         categoryCount *= ((_CategoryVariable*)LocateVar(categoryVariables.lData[k]))->GetNumberOfIntervals();
     }
     return categoryCount;
@@ -9674,7 +9717,7 @@ void _TheTree::MapPostOrderToInOderTraversal (_SimpleList& storeHere, bool doINo
 
     while (traversalNode) {
         bool isTip = IsCurrentNodeATip();
-        if (isTip && !doINodes || !isTip && doINodes) {
+        if ((isTip && !doINodes) || (!isTip && doINodes)) {
             storeHere.lData[nodeMapper->GetXtra (nodeMapper->Find((BaseRef)(&GetCurrentNode())))] = allNodeCount++;
         }
 
@@ -10408,18 +10451,15 @@ void    _TheTree::MolecularClock (_String& baseNode, _List& varsToConstrain)
     }
 
     if (!topNode) {
-        _String errMsg = _String ("Molecular clock constraint has failed, since node ")
-                         &baseNode
-                         &" is not a part of tree "
-                         &*GetName();
-
-        WarnError (errMsg);
+        WarnError (_String ("Molecular clock constraint has failed, since node '")
+                   &baseNode
+                   &"' is not a part of tree '"
+                   &*GetName() & "'");
     } else
-        for (long k=1; k<varsToConstrain.lLength; k++) {
+        for (unsigned long k=1; k<varsToConstrain.lLength; k++) {
             long varIndex = LocateVarByName (*(_String*)varsToConstrain (k));
             if (varIndex<0) {
-                _String errMsg = _String ("Molecular clock constraint has failed, since variable ") &*(_String*)varsToConstrain (k) &" is undefined.";
-                WarnError (errMsg);
+                WarnError (_String ("Molecular clock constraint has failed, since variable' ") &*(_String*)varsToConstrain (k) &"' is undefined.");
                 return ;
             }
             curNode->RecurseMC (variableNames.GetXtra(varIndex), topNode, true, rooted);
@@ -11102,7 +11142,7 @@ _String _TreeTopology::MatchTreePattern (_TreeTopology* compareTo)
 
             // pass 2 - prune internal nodes with exactly one child
 
-
+            // >O
             padresStillSuck = DepthWiseStepTraverser (myCT);
 
             while (padresStillSuck) {

@@ -6,19 +6,24 @@ Copyright (C) 1997-2009
   Sergei L Kosakovsky Pond (spond@ucsd.edu)
   Art FY Poon              (apoon@cfenet.ubc.ca)
 
-This program is free software; you can redistribute it and/or
-modify it under the terms of the GNU General Public License
-as published by the Free Software Foundation; either version 2
-of the License, or (at your option) any later version.
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 */
 
@@ -64,15 +69,15 @@ extern _Parameter dFPrintFormat,
 
 //_________________________________________________________
 
-_String           dataFileTree              ("IS_TREE_PRESENT_IN_DATA"),
+_String           dataFileTree             ("IS_TREE_PRESENT_IN_DATA"),
                   dataFileTreeString       ("DATAFILE_TREE"),
                   aminoAcidOneCharCodes    ("ACDEFGHIKLMNPQRSTVWY"),
                   dnaOneCharCodes          ("ACGT"),
                   rnaOneCharCodes          ("ACGU"),
                   binaryOneCharCodes       ("01"),
                   nexusFileTreeMatrix      ("NEXUS_FILE_TREE_MATRIX"),
-                  dataFilePartitionMatrix   ("DATA_FILE_PARTITION_MATRIX"),
-                  useTraversalHeuristic        ("USE_TRAVERSAL_HEURISTIC"),
+                  dataFilePartitionMatrix  ("DATA_FILE_PARTITION_MATRIX"),
+                  useTraversalHeuristic    ("USE_TRAVERSAL_HEURISTIC"),
                   defaultLargeFileCutoff   ("USE_MEMORY_SAVING_DATA_STRUCTURES"),
                   fileTreeString;
 
@@ -2131,6 +2136,186 @@ void    _DataSetFilter::SetDimensions (void)
     dimension   = GetDimension(true);
     undimension = GetDimension(false);
 }
+
+//_______________________________________________________________________
+unsigned long    _DataSetFilter::FindUniqueSequences  (_SimpleList& indices, _SimpleList& map, _SimpleList& counts, short mode)
+{
+    indices.Clear(); map.Clear(); counts.Clear();
+    
+    unsigned long             sites  = theMap.lLength,
+    seqs   = theNodeMap.lLength,
+    unit   = GetUnitLength();
+    
+    if (mode == 0)
+        {
+        _SimpleList hashSupport;        
+        _AVLListXL  sequenceHashes     (&hashSupport);
+        
+        for (unsigned long sequenceIndex = 0; sequenceIndex < seqs; sequenceIndex ++){
+            _String * thisSequence = GetSequenceCharacters (sequenceIndex);
+            
+            long     sequenceHash   = thisSequence->Adler32(),
+            f              = sequenceHashes.Find ((BaseRef)sequenceHash),
+            rawSequenceIdx = theNodeMap.lData[sequenceIndex];
+            
+            DeleteObject (thisSequence);
+            
+            _SimpleList * sameScore = nil;
+            if (f>=0) {
+                sameScore = (_SimpleList*)sequenceHashes.GetXtra (f);
+                for (long k = 0; k<sameScore->lLength; k++) {
+                    bool fit = true;
+                    f = sameScore->lData[k];
+                    
+                    long fRaw = theNodeMap.lData[indices.lData[f]];
+                    
+                    for (unsigned long site = 0; site < sites && fit; site++){
+                        for (unsigned long unitIndex = 0; unitIndex < unit; unitIndex ++){
+                            _Site * thisSite = theData->GetSite(theMap.lData[unit*site+unitIndex]);
+                            if (thisSite->sData[fRaw] != thisSite->sData[rawSequenceIdx]){
+                                fit = false;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (fit) {
+                        map << f;
+                        counts.lData[f] ++;
+                        
+                    } else {
+                        f = -1;
+                    }
+                }
+            }
+            if (f==-1) { // fit failed or unique site
+                if (!sameScore) {
+                    sameScore = (_SimpleList*)checkPointer(new _SimpleList);
+                    sequenceHashes.Insert ((BaseRef)sequenceHash,(long)sameScore,false);
+                }
+                
+                (*sameScore) << indices.lLength;
+                map     << indices.lLength;
+                indices << sequenceIndex;
+                counts  << 1;
+            }
+        }
+        
+        }
+    else{
+        long             vd  = GetDimension(true);
+        
+        _Parameter      *translatedVector = (_Parameter*)checkPointer(new _Parameter [vd]),
+        *translatedVector2= (_Parameter*)checkPointer(new _Parameter [vd]);
+        
+        _String         state1 (unit,false),
+        state2 (unit,false);
+        
+        for (long sequenceIndex = 0; sequenceIndex < seqs; sequenceIndex++) {
+            bool checkState = false;
+            for (long idx=0; idx<indices.countitems(); idx++) {
+                for (long m=0; m<sites; m++) {
+                    RetrieveState (m,sequenceIndex, state1,false);
+                    RetrieveState (m,indices.lData[idx], state2,false);
+                    
+                    checkState = true;
+                    long idx1 = Translate2Frequencies (state1, translatedVector,  true),
+                    idx2 = Translate2Frequencies (state2, translatedVector2, true);
+                    
+                    //printf ("(%ld, %ld) %ld = %ld %ld\n", sequenceIndex, indices.lData[idx], m, idx1, idx2); 
+                    
+                    if (idx2 >=0 && idx1 >=0) {
+                        if (idx1==idx2) {
+                            continue;
+                        } else {
+                            checkState = false;
+                            break;
+                        }
+                    } else {
+                        
+                        // check for equal ambigs 
+                        long k = 0;
+                        for (; k < vd; k++){
+                            if (translatedVector[k] != translatedVector2[k]){
+                                break;
+                            }
+                        }
+                            
+                        if (k == vd)
+                            continue;
+                            
+                        if (mode == 1){
+                            
+                                long count1 = 0,
+                                     count2 = 0;
+                                
+                                for (long t = 0; t<vd; t++) {
+                                    count1 += translatedVector[t]>0.0;
+                                    count2 += translatedVector2[t]>0.0;
+                                }
+                                
+                                if (count1 < vd && count2 < vd) {
+                                    checkState = false;
+                                    break;
+                                }
+                                
+                            } else {
+                                bool first  = mode==2,
+                                second = mode==2;
+                                if (mode == 2){
+                                    for (long t = 0; (first||second)&&(t<vd); t++) {
+                                        if (translatedVector[t]>0.0) {
+                                            second &= (translatedVector2[t]>0.0);
+                                        }
+                                        if (translatedVector2[t]>0.0) {
+                                            first  &= (translatedVector[t]>0.0);
+                                        }
+                                    }
+                                    if (!(first||second)) {
+                                        checkState = false;
+                                        break;
+                                    }
+                                } else {
+                                    for (long t = 0; t<vd; t++) {
+                                        if (translatedVector[t]>0.0) {
+                                            second |= (translatedVector2[t]>0.0);
+                                        }
+                                        if (translatedVector2[t]>0.0) {
+                                            first  |= (translatedVector[t]>0.0);
+                                        }
+                                    }                       
+                                    if (!(first&&second)) {
+                                        checkState = false;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                
+                if (checkState) {
+                    map << idx;
+                    counts.lData[idx] ++;
+                    break;
+                }
+            }
+            
+            if (!checkState){
+                map     << indices.lLength;
+                indices << sequenceIndex;
+                counts  << 1;
+            }
+            
+        }
+        
+        delete [] translatedVector;
+        delete [] translatedVector2;   
+    }
+    
+    
+    return indices.lLength;
+}
+
 //_______________________________________________________________________
 
 void    _DataSetFilter::SetFilter (_DataSet* ds, char unit, _SimpleList& horizontalList, _SimpleList& verticalList, bool isFilteredAlready)
@@ -2280,6 +2465,7 @@ void    _DataSetFilter::SetFilter (_DataSet* ds, char unit, _SimpleList& horizon
 
         long        f = siteIndices.Find ((BaseRef)colIndex);
         _SimpleList * sameScore = nil;
+        
         if (f>=0) {
             sameScore = (_SimpleList*)siteIndices.GetXtra (f);
             for (long k = 0; k<sameScore->lLength; k++) {
@@ -2287,8 +2473,8 @@ void    _DataSetFilter::SetFilter (_DataSet* ds, char unit, _SimpleList& horizon
                 f = sameScore->lData[k];
                 for (long j=0; fit&&(j<unit); j++) { // sweep within one block
                     _Site * site1 = ds->GetSite(verticalList.lData[i+j]),
-                            * site2 = ds->GetSite(theMap.lData[unit*f+j]);
-
+                          * site2 = ds->GetSite(theMap.lData[unit*f+j]); 
+                            
                     for (long k=0; k<theNodeMap.lLength; k++) // sweep down the columns
                         if (site1->sData[theNodeMap.lData[k]]!=site2->sData[theNodeMap.lData[k]]) {
                             fit = false;
@@ -2308,20 +2494,11 @@ void    _DataSetFilter::SetFilter (_DataSet* ds, char unit, _SimpleList& horizon
         }
         if (f==-1) { // fit failed or unique site
             if (!sameScore) {
-                sameScore = new _SimpleList;
-                checkPointer (sameScore);
-                //if (colIndex == 1096226140L)
-                //startD = true;
-                siteIndices.Insert ((BaseRef)colIndex,(long)sameScore);
-                //if (startD && siteIndices.Find ((BaseRef)1096226140L) < 0)
-                //_String("Barf");
-                //siteIndices.ConsistencyCheck();
-                DeleteObject (sameScore);
-            }
+                sameScore = (_SimpleList*)checkPointer(new _SimpleList);
+                siteIndices.Insert ((BaseRef)colIndex,(long)sameScore,false);
+             }
 
-            //indices<<colIndex;
             (*sameScore) << theFrequencies.lLength;
-
             duplicateMap<<theFrequencies.lLength;
             theFrequencies<<1;
             for (j=0; j<unit; j++) {
@@ -2331,35 +2508,6 @@ void    _DataSetFilter::SetFilter (_DataSet* ds, char unit, _SimpleList& horizon
     }
 
     siteIndices.Clear();
-
-    /*if (unit==1)
-    {
-        // bug check for site duplication
-        for (long i=0; i<theMap.lLength; i++)
-        {
-            for (long j=i+unit; j<theMap.lLength; j++)
-            {
-                if (theData->theMap[theMap.lData[i]]==theData->theMap[theMap.lData[j]])
-                {
-                    char     bug [128];
-                    sprintf (bug,"%d %d duplicate!\n",i,j);
-                    BufferToConsole (bug);
-                }
-            }
-        }
-    }*/
-
-    /*if (unit>1)
-    // bug check for duplicate map
-    {
-        _SimpleList dFreq (theFrequencies.lLength);
-        for (long k=0; k<duplicateMap.lLength; k++)
-            dFreq.lData[duplicateMap.lData[k]]++;
-        for (long k2=0; k2<theFrequencies.lLength; k2++)
-            if (dFreq.lData[k2]!=theFrequencies.lData[k2])
-                printf ("Duplicate Bug %d %d %d\n", k2, dFreq.lData[k2], theFrequencies.lData[k2]);
-    }
-    */
 
     duplicateMap.TrimMemory();
     theOriginalOrder.TrimMemory();
@@ -3011,18 +3159,6 @@ void    _DataSetFilter::FindAllSitesLikeThisOne (long index, _SimpleList& recept
 
 _String&     _DataSetFilter::operator () (unsigned long site, unsigned long pos)
 {
-    /*static    _String* reply = nil;
-    static  unsigned long lastUL = 0;
-
-    if (!reply||(lastUL!=unitLength))
-    {
-        DeleteObject (reply);
-        lastUL = unitLength;
-        reply = new _String (lastUL, false);
-        checkPointer(reply);
-
-    }*/
-
     if (!accessCache || accessCache->sLength != unitLength) {
         if (accessCache) {
             DeleteObject (accessCache);
@@ -5128,7 +5264,7 @@ void ReadNextLine (FILE* fp, _String *s, FileState* fs, bool, bool upCase)
 
     tempBuffer.Finalize();
 
-    if ( fp&&feof(fp) || fs->theSource&& fs->pInSrc>=fs->theSource->sLength )
+    if ( (fp && feof(fp)) || (fs->theSource && fs->pInSrc >= fs->theSource->sLength) )
         if (tempBuffer.sLength == 0) {
             *s = "";
             return;

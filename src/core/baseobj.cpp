@@ -11,19 +11,24 @@ Significant contributions from:
   Simon DW Frost (sdfrost@ucsd.edu)
   Art FY Poon    (apoon@biomail.ucsd.edu)
 
-This program is free software; you can redistribute it and/or
-modify it under the terms of the GNU General Public License
-as published by the Free Software Foundation; either version 2
-of the License, or (at your option) any later version.
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 */
 
@@ -46,6 +51,7 @@ extern int _hy_mpi_node_rank;
 
 #if defined   __UNIX__ || defined __HYPHY_GTK__
 #include <sys/time.h>
+#include <unistd.h>
 #endif
 
 #ifdef    __HYPHYDMALLOC__
@@ -55,6 +61,13 @@ extern int _hy_mpi_node_rank;
 #ifdef   __HYPHYXCODE__
 #include "HYUtils.h"
 #endif
+
+#ifdef __WINDOZE__
+    #include <Windows.h>
+#endif
+
+
+
 bool        terminateExecution  = false;
 
 #include    "batchlan.h"
@@ -141,10 +154,26 @@ FILE *      doFileOpen (const char * fileName, const char * mode, bool warn)
 bool    GlobalStartup (void)
 {
     SetupOperationLists     ();
+    unsigned long seed_init = 0L;
     time_t                  k;
     time                    (&k);
-    init_genrand            (k);
-    globalRandSeed          = k;
+    seed_init               = k;
+    
+#ifdef __HYPHYMPI__
+    _hyApplicationGlobals.Insert(new _String (mpiNodeID));
+    _hyApplicationGlobals.Insert(new _String (mpiNodeCount));
+    _hyApplicationGlobals.Insert(new _String (mpiLastSentMsg));
+    seed_init += _hy_mpi_node_rank;
+#endif
+
+    
+#ifndef __WINDOZE__
+    seed_init               += getpid();
+#else
+    seed_init               += long(GetCurrentProcess());
+#endif
+    init_genrand            (seed_init);
+    globalRandSeed          = seed_init;
     setParameter            (randomSeed,globalRandSeed);
     long                    p   = 1;
 
@@ -157,6 +186,7 @@ bool    GlobalStartup (void)
     _hyApplicationGlobals.Insert(new _String (statusBarUpdateString));
     _hyApplicationGlobals.Insert(new _String (statusBarProgressValue));
     _hyApplicationGlobals.Insert(new _String (hyphyBaseDirectory));
+    _hyApplicationGlobals.Insert(new _String (hyphyLibDirectory));
     _hyApplicationGlobals.Insert(new _String (platformDirectorySeparator));
     _hyApplicationGlobals.Insert(new _String (pathToCurrentBF));
 
@@ -176,17 +206,12 @@ bool    GlobalStartup (void)
 
     _HBL_Init_Const_Arrays  ();
 
-#ifdef __HYPHYMPI__
-    _hyApplicationGlobals.Insert(new _String (mpiNodeID));
-    _hyApplicationGlobals.Insert(new _String (mpiNodeCount));
-    _hyApplicationGlobals.Insert(new _String (mpiLastSentMsg));
 
-#endif
 
 #ifndef __HEADLESS__ // do not create log files for _HEADLESS_
 #ifndef __HYPHYMPI__
     _String fileName(errorFileName);
-#ifdef __HYPHYXCODE__
+#if defined __HYPHYXCODE__ || defined __WINDOZE__
     fileName = baseDirectory & fileName;
 #endif
 #else
@@ -196,7 +221,7 @@ bool    GlobalStartup (void)
     globalErrorFile = doFileOpen (fileName.sData,"w+");
     while (globalErrorFile == nil && p<10) {
         fileName = errorFileName&'.'&_String(p);
-#ifdef __HYPHYXCODE__
+#if defined __HYPHYXCODE__ || defined __WINDOZE__
         fileName = baseDirectory & fileName;
 #endif
         globalErrorFile = doFileOpen (fileName.sData,"w+");
@@ -207,7 +232,7 @@ bool    GlobalStartup (void)
     p=1;
 #ifndef __HYPHYMPI__
     fileName = messageFileName;
-#ifdef __HYPHYXCODE__
+#if defined __HYPHYXCODE__ || defined __WINDOZE__
     fileName = baseDirectory & fileName;
 #endif
 #else
@@ -218,7 +243,7 @@ bool    GlobalStartup (void)
 
     while (globalMessageFile == nil && p<10) {
         fileName = messageFileName&'.'&_String(p);
-#ifdef __HYPHYXCODE__
+#if defined __HYPHYXCODE__ || defined __WINDOZE__
         fileName = baseDirectory & fileName;
 #endif
         globalMessageFile = doFileOpen (fileName.sData,"w+");
@@ -236,8 +261,14 @@ bool    GlobalShutdown (void)
 {
     bool res = true;
 
+#if defined (__HYPHY_GTK__) || defined (__HEADLESS__)
+#elif defined __UNIX__
+    if (needExtraNL)
+        printf ("\n");
+#endif
+
 #ifdef  __HYPHYMPI__
-    int     size;
+    int     flag, size;
 
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     PurgeAll (true);
@@ -257,10 +288,13 @@ bool    GlobalShutdown (void)
 #ifdef __USE_ABORT_HACK__
     MPI_Abort(MPI_COMM_WORLD,0);
 #else
-    MPI_Finalize();
+    MPI_Finalized(&flag);
+    if (!flag)
+        MPI_Finalize();
 #endif
     ReportWarning ("Returned from MPI_Finalize");
 #endif
+
 
     if (globalErrorFile) {
         fflush (globalErrorFile);
@@ -300,6 +334,17 @@ bool    GlobalShutdown (void)
 #endif
         }
     }
+    
+    _SimpleList  hist;
+    long         ls,
+                 cn = _HY_HBLCommandHelper.Traverser (hist,ls,_HY_HBLCommandHelper.GetRoot());
+
+    while (cn >= 0) {
+        delete ((_HBLCommandExtras*)_HY_HBLCommandHelper.GetXtra(cn));
+        cn = _HY_HBLCommandHelper.Traverser (hist,ls);
+    }
+    _HY_HBLCommandHelper.Clear();
+    _HY_ValidHBLExpressions.Clear();
 
     return res;
 }
@@ -348,7 +393,7 @@ void    PurgeAll (bool all)
     setParameter (randomSeed,globalRandSeed);
     isInFunction        = false;
     isDefiningATree     = false;
-#if defined __HYPHYMPI__ && defined __HYPHY_GTK__
+#ifdef __HYPHYMPI__
     int            size;
 
     MPI_Comm_size   (MPI_COMM_WORLD, &size);
