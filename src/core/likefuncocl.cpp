@@ -1209,7 +1209,7 @@ void _OCLEvaluator::Cleanup (int iExitCode)
         clean = true;
         exit(0);
 
-        if (iExitCode = EXIT_FAILURE)
+        if (iExitCode == EXIT_FAILURE)
             exit (iExitCode);
     }
 }

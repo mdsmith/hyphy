@@ -30,8 +30,21 @@ __kernel void LeafKernel(  __global float* node_cache,                // argumen
         scale = scalings[parentCharacterIndex];
     }
     long siteState = nodFlag_cache[childNodeIndex*sites + gy];
+    __local float modelCache[64*64];
+    int modelID = get_local_id(0);
+    while (modelID < 64*64)
+    {
+        modelCache[modelID] = model[nodeID*roundCharacters*roundCharacters + modelID];
+        modelID += get_local_size(0);
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+    /*
+    // This is for the other model array layout
     //privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + siteState*roundCharacters + gx];
-    privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + gx*roundCharacters + siteState];
+    // This is for the current model array layout
+    //privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + gx*roundCharacters + siteState];
+    */
+    privateParentScratch *= modelCache[gx*roundCharacters + siteState];
     if (gy < sites && gx < characters)
     {
         node_cache[parentCharacterIndex] = privateParentScratch;
