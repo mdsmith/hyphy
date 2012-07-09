@@ -1,5 +1,5 @@
  #define MIN(a,b) ((a)>(b)?(b):(a))
-__kernel void LeafKernel(  __global float* node_cache,                // argument 0
+__kernel void LeafKernel(    __global float* node_cache,                // argument 0
                              __global const float* model,                // argument 1
                              __global const float* nodRes_cache,          // argument 2
                              __global const long* nodFlag_cache,          // argument 3
@@ -12,15 +12,16 @@ __kernel void LeafKernel(  __global float* node_cache,                // argumen
                              int nodeID,                                    // argument 10
                              __global int* scalings,                       // argument 11
                              float scalar,                               // argument 12
-                             float uFlowThresh                           // argument 13
+                             float uFlowThresh,                           // argument 13
+                             int sharedMemorySize
                              )
 {
     int gx = get_global_id(0); // pchar
     gx = get_global_id(0) % roundCharacters;
-    if (gx > characters) return;
+    //if (gx > characters) return;
     int gy = get_global_id(1); // site
     gy = get_global_id(0) / roundCharacters;
-    if (gy > sites) return;
+    //if (gy > sites) return;
     long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + gy*roundCharacters + gx;
     float privateParentScratch = 1.0f;
     int scale = 0;
@@ -30,21 +31,28 @@ __kernel void LeafKernel(  __global float* node_cache,                // argumen
         scale = scalings[parentCharacterIndex];
     }
     long siteState = nodFlag_cache[childNodeIndex*sites + gy];
-    __local float modelCache[64*64];
-    int modelID = get_local_id(0);
-    while (modelID < 64*64)
+
+    if (sharedMemorySize >= 64*64)
     {
-        modelCache[modelID] = model[nodeID*roundCharacters*roundCharacters + modelID];
-        modelID += get_local_size(0);
+        __local float modelCache[64*64];
+        int modelID = get_local_id(0);
+        while (modelID < 64*64)
+        {
+            modelCache[modelID] = model[nodeID*roundCharacters*roundCharacters + modelID];
+            modelID += get_local_size(0);
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+        if (gy < sites && gx < characters)
+            privateParentScratch *= modelCache[gx*roundCharacters + siteState];
     }
-    barrier(CLK_LOCAL_MEM_FENCE);
+    else
+        privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + gx*roundCharacters + siteState];
     /*
     // This is for the other model array layout
     //privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + siteState*roundCharacters + gx];
     // This is for the current model array layout
-    //privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + gx*roundCharacters + siteState];
+    privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + gx*roundCharacters + siteState];
     */
-    privateParentScratch *= modelCache[gx*roundCharacters + siteState];
     if (gy < sites && gx < characters)
     {
         node_cache[parentCharacterIndex] = privateParentScratch;
@@ -156,9 +164,9 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
                          )
 {
     // Get thread specific junk going (where it is in the parent cache)
-    int tx = get_local_id(0);    
+    int tx = get_local_id(0);
     int pchar = tx % roundCharacters;
-    int gx = get_global_id(0);   
+    int gx = get_global_id(0);
     int site = gx / roundCharacters;
     int numSites = get_local_size(0) / roundCharacters;
     int groupStartSite = (gx - tx) / roundCharacters; // this should get me to the first site in the work group
@@ -173,7 +181,7 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
         privateParentScratch = node_cache[parentCharacterIndex];
         //scale = scalings[parentCharacterIndex];
     }
-    
+
     // Now lets start the matrix multiplication
 
     float sum = 0.0;
@@ -208,7 +216,7 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
             sum += childValue * modelValue;
         }
     }
-    else 
+    else
     {
         for (int i = 0; i < roundCharacters; i++)
         {
@@ -223,9 +231,6 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
         node_cache[parentCharacterIndex] = privateParentScratch;
         root_cache[site*roundCharacters + pchar] = privateParentScratch;
     }
-        
-    
-
 
 /*
     // Shared cache chunk sizes:
