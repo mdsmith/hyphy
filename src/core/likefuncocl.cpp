@@ -331,7 +331,7 @@ int _OCLEvaluator::setupContext(void)
     // max number of sites that can be addressed in one work group based on shared memory size 
     childCacheMemAllotment = (maxLocalSize - roundCharacters*roundCharacters*2)/4; // two for half the shared cache, four for bytes -> ints
     childCacheMemAllotment /= 64;
-    
+
     printf("Child site allotment per work group: %d\n sites", childCacheMemAllotment);
 
     // set and log Global and Local work size dimensions
@@ -342,8 +342,8 @@ int _OCLEvaluator::setupContext(void)
         szLocalWorkSize[0] = 1;
         szLocalWorkSize[1] = 1;
     }
-    else 
-    {   
+    else
+    {
         szLocalWorkSize[0] = 64;
         szLocalWorkSize[1] = MIN(maxWorkGroupSize/64, childCacheMemAllotment);
     }
