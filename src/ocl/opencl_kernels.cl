@@ -32,7 +32,7 @@ __kernel void LeafKernel(    __global float* node_cache,                // argum
     }
     long siteState = nodFlag_cache[childNodeIndex*sites + gy];
 
-    if (sharedMemorySize >= 64*64)
+    if (sharedMemorySize >= (64*64*4))
     {
         __local float modelCache[64*64];
         int modelID = get_local_id(0);
@@ -159,7 +159,7 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
                          float uFlowThresh,                     // argument 13
                          __global int* root_scalings,                // argument 10
                          int sharedMemorySize,
-                         __local float* modelScratch,
+                         __local float* modelCache,
                          __local float* childScratch
                          )
 {
@@ -170,7 +170,7 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
     int site = gx / roundCharacters;
     int numSites = get_local_size(0) / roundCharacters;
     int groupStartSite = (gx - tx) / roundCharacters; // this should get me to the first site in the work group
-    int localSite = tx / roundCharacters;
+    //int localSite = tx / roundCharacters;
     //int localSite = tx / roundCharacters;
     // Cache that parent character value!
     long parentCharacterIndex = parentNodeIndex*sites*roundCharacters + site*roundCharacters + pchar;
@@ -183,38 +183,37 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
     }
 
     // Now lets start the matrix multiplication
-
     float sum = 0.0;
-    if (sharedMemorySize >= 32768)
+    if (sharedMemorySize >= 64*64*4*2)
     {
-        int modelI = tx;
-        while (modelI < roundCharacters*roundCharacters)
+        int modelID = get_local_id(0);
+        while (modelID < 64*64)
         {
-            modelScratch[modelI] = model[nodeID*roundCharacters*roundCharacters + modelI];
-            modelI += get_local_size(0);
+            modelCache[modelID] = model[nodeID*roundCharacters*roundCharacters + modelID];
+            modelID += get_local_size(0);
         }
-        childScratch[tx] = node_cache[childNodeIndex*sites*roundCharacters + groupStartSite*roundCharacters + tx];
+        childScratch[get_local_id(0)] = node_cache[childNodeIndex*sites*roundCharacters + groupStartSite*roundCharacters + get_local_id(0)];
         barrier(CLK_LOCAL_MEM_FENCE);
-        for (int i = 0; i < roundCharacters; i++)
-        {
-            sum += childScratch[localSite*roundCharacters + i] * modelScratch[roundCharacters*pchar + i];
-        }
+        if (site < sites && pchar < characters)
+            for (int i = 0; i < characters; i++)
+            {       
+                sum += childScratch[(site-groupStartSite)*roundCharacters + i] * modelCache[roundCharacters*pchar + i];
+            }
     }
-    else if (sharedMemorySize >= 16384)
+    else if (sharedMemorySize >= 64*64*4)
     {
-        int modelI = tx;
-        while (modelI < roundCharacters*roundCharacters)
+        int modelID = get_local_id(0);
+        while (modelID < 64*64)
         {
-            modelScratch[modelI] = model[nodeID*roundCharacters*roundCharacters + modelI];
-            modelI += get_local_size(0);
+            modelCache[modelID] = model[nodeID*roundCharacters*roundCharacters + modelID];
+            modelID += get_local_size(0);
         }
         barrier(CLK_LOCAL_MEM_FENCE);
-        for (int i = 0; i < roundCharacters; i++)
-        {
-            float childValue = node_cache[childNodeIndex*sites*roundCharacters + site*roundCharacters + i];
-            float modelValue = modelScratch[roundCharacters*pchar + i];
-            sum += childValue * modelValue;
-        }
+        if (site < sites && pchar < characters)
+            for (int i = 0; i < characters; i++)
+            {       
+                sum += node_cache[childNodeIndex*sites*roundCharacters + site*roundCharacters + i] * modelCache[roundCharacters*pchar + i];
+            }
     }
     else
     {
