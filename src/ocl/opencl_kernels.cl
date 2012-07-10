@@ -192,7 +192,8 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
             modelCache[modelID] = model[nodeID*roundCharacters*roundCharacters + modelID];
             modelID += get_local_size(0);
         }
-        childScratch[get_local_id(0)] = node_cache[childNodeIndex*sites*roundCharacters + groupStartSite*roundCharacters + get_local_id(0)];
+        childScratch[get_local_id(0)] = 
+            node_cache[childNodeIndex*sites*roundCharacters + groupStartSite*roundCharacters + get_local_id(0)];
         barrier(CLK_LOCAL_MEM_FENCE);
         if (site < sites && pchar < characters)
             for (int i = 0; i < characters; i++)
@@ -212,7 +213,9 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
         if (site < sites && pchar < characters)
             for (int i = 0; i < characters; i++)
             {       
-                sum += node_cache[childNodeIndex*sites*roundCharacters + site*roundCharacters + i] * modelCache[roundCharacters*pchar + i];
+                sum += 
+                    node_cache[childNodeIndex*sites*roundCharacters + site*roundCharacters + i] * 
+                    modelCache[roundCharacters*pchar + i];
             }
     }
     else
@@ -230,70 +233,6 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
         node_cache[parentCharacterIndex] = privateParentScratch;
         root_cache[site*roundCharacters + pchar] = privateParentScratch;
     }
-
-/*
-    // Shared cache chunk sizes:
-    int childCharacters = 64; // 64 regardless of local size as every parent character relies on every child character
-    int childSites = get_local_size(1); // this one varies depending on the number of sites. More sites *= number of child characters
-    // Child characters should be major
-    int modelChildCharacters = 64; // regardless of the number of parent characters we're addressing, we're addressing all of the possible child characters
-    int modelParentCharacters = MAX(get_local_size(0)/2, 1); // depends on how many parent characters we're addressing. We'll do it in two rounds for now. This should eventually be generalized
-
-    float sum = 0.f;
-    float childSum = 0.f;
-    int scaleScratch = scalings[childNodeIndex*sites*roundCharacters + gy*roundCharacters + gx];
-    __local float  childScratch[childCharacters][childSites];
-    __local float  modelScratch[modelChildCharacters][modelParentCharacters];
-    childScratch[tx][ty] = node_cache[childNodeIndex*sites*roundCharacters + roundCharacters*gy + tx];
-    int currentIndex = gx;
-    if (gx < 32)
-    {
-        modelScratch[tx][ty] = model[nodeID*roundCharacters*roundCharacters + roundCharacters*gx + 
-    }
-    for (int 
-    for (int pcBlock = 0; pcBlock < 2; pcBlock ++)
-    {
-
-    }
-*/
-
-
-/*
-    short cChar = 0;
-    for (int charBlock = 0; charBlock < 64/BLOCK_SIZE; charBlock++)
-    {
-        childScratch[ty][tx] =
-             node_cache[childNodeIndex*sites*roundCharacters + roundCharacters*gy + (charBlock*BLOCK_SIZE) + tx];
-        //modelScratch[ty][tx] = model[nodeID*roundCharacters*roundCharacters + roundCharacters*((charBlock*BLOCK_SIZE)+ty) + gx];
-        modelScratch[ty][tx] = model[nodeID*roundCharacters*roundCharacters + roundCharacters*gx + ((charBlock*BLOCK_SIZE)+ty)];
-        barrier(CLK_LOCAL_MEM_FENCE);
-        for (int myChar = 0; myChar < MIN(BLOCK_SIZE, (characters-cChar)); myChar++)
-        {
-            sum += childScratch[ty][myChar] * modelScratch[myChar][tx];
-            childSum += childScratch[ty][myChar];
-        }
-          barrier(CLK_LOCAL_MEM_FENCE);
-        cChar += BLOCK_SIZE;
-    }
-    while (childSum < 1 && childSum != 0)
-    {
-        childSum *= scalar;
-        sum *= scalar;
-        scaleScratch++;
-    }
-    scale += scaleScratch;
-*/
-
-/*
-    privateParentScratch *= sum;
-    if (gy < sites && gx < characters)
-    {
-        scalings     [parentCharacterIndex]  = scale;
-        root_scalings[gy*roundCharacters+gx] = scale;
-        node_cache    [parentCharacterIndex]  = privateParentScratch;
-        root_cache    [gy*roundCharacters+gx] = privateParentScratch;
-    }
-*/
 }
 __kernel void ResultKernel (    __global int* freq_cache,                   // argument 0
                                  __global float* prob_cache,                  // argument 1

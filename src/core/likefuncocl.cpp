@@ -65,38 +65,38 @@
 //#define OCLVERBOSE
 
 #if defined(__APPLE__) || defined(APPLE)
-#include <OpenCL/OpenCL.h>
-typedef float fpoint;
-typedef cl_float clfp;
-#define FLOATPREC "typedef float fpoint; \n"
-//#define PRAGMADEF "#pragma OPENCL EXTENSION cl_khr_fp64: enable \n"
-#define PRAGMADEF " \n"
-//#pragma OPENCL EXTENSION cl_khr_fp64: enable
+    #include <OpenCL/OpenCL.h>
+    typedef float fpoint;
+    typedef cl_float clfp;
+    #define FLOATPREC "typedef float fpoint; \n"
+    //#define PRAGMADEF "#pragma OPENCL EXTENSION cl_khr_fp64: enable \n"
+    #define PRAGMADEF " \n"
+    //#pragma OPENCL EXTENSION cl_khr_fp64: enable
 #elif defined(__NVIDIAOCL__)
-//#define __GPUResults__
-#define __OCLPOSIX__
-//#include <oclUtils.h>
-#include <CL/opencl.h>
-typedef double fpoint;
-typedef cl_double clfp;
-#define FLOATPREC "typedef double fpoint; \n"
-#define PRAGMADEF "#pragma OPENCL EXTENSION cl_khr_fp64: enable \n"
-#pragma OPENCL EXTENSION cl_khr_fp64: enable
+    //#define __GPUResults__
+    #define __OCLPOSIX__
+    //#include <oclUtils.h>
+    #include <CL/opencl.h>
+    typedef double fpoint;
+    typedef cl_double clfp;
+    #define FLOATPREC "typedef double fpoint; \n"
+    #define PRAGMADEF "#pragma OPENCL EXTENSION cl_khr_fp64: enable \n"
+    #pragma OPENCL EXTENSION cl_khr_fp64: enable
 #elif defined(__AMDOCL__) 
-//#define __GPUResults__
-#define __OCLPOSIX__
-#include <CL/opencl.h>
-typedef double fpoint;
-typedef cl_double clfp;
-#define FLOATPREC "typedef double fpoint; \n"
-#define PRAGMADEF "#pragma OPENCL EXTENSION cl_amd_fp64: enable \n"
-#pragma OPENCL EXTENSION cl_amd_fp64: enable
-#elif defined(FLOAT)
-#include <CL/opencl.h>
-typedef float fpoint;
-typedef cl_float clfp;
-#define FLOATPREC "typedef float fpoint; \n"
-#define PRAGMADEF " \n"
+    //#define __GPUResults__
+    #define __OCLPOSIX__
+    #include <CL/opencl.h>
+    typedef double fpoint;
+    typedef cl_double clfp;
+    #define FLOATPREC "typedef double fpoint; \n"
+    #define PRAGMADEF "#pragma OPENCL EXTENSION cl_amd_fp64: enable \n"
+    #pragma OPENCL EXTENSION cl_amd_fp64: enable
+    #elif defined(FLOAT)
+    #include <CL/opencl.h>
+    typedef float fpoint;
+    typedef cl_float clfp;
+    #define FLOATPREC "typedef float fpoint; \n"
+    #define PRAGMADEF " \n"
 #endif
 
 //#define __VERBOSE__
