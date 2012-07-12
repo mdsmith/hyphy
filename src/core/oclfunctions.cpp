@@ -49,6 +49,7 @@
 #ifdef OCL
 
 #include "opencl_kernels.h"
+#include "oclfunctions.h"
 
 int MatrixMultiply()
 {
