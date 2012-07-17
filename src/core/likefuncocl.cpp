@@ -588,18 +588,18 @@ int _OCLEvaluator::setupContext(void)
     printf("Max Reduction Kernel Work Group Size: %ld \n", (long unsigned) maxKernelSize);
 #endif
 
-    long tempLeafState = 1;
-    long tempSiteCount = siteCount;
-    long tempCharCount = alphabetDimension;
-    long tempChildNodeIndex = 0;
-    long tempParentNodeIndex = 0;
-    long tempRoundCharCount = roundUpToNextPowerOfTwo(alphabetDimension);
-    int  tempTagIntState = 0;
-    int   tempNodeID = 0;
-    int sharedMemorySize = maxLocalSize;
-    float tempScalar = scalar;
+    cl_long tempLeafState = 1;
+    cl_long tempSiteCount = siteCount;
+    cl_long tempCharCount = alphabetDimension;
+    cl_long tempChildNodeIndex = 0;
+    cl_long tempParentNodeIndex = 0;
+    cl_long tempRoundCharCount = roundUpToNextPowerOfTwo(alphabetDimension);
+    cl_int tempTagIntState = 0;
+    cl_int tempNodeID = 0;
+    cl_long sharedMemorySize = maxLocalSize;
+    cl_float tempScalar = scalar;
     // this is currently ignored, 1 is hardcoded into the kernel code. 
-    float tempuFlowThresh = 0.000000001f;
+    cl_float tempuFlowThresh = 0.000000001f;
 
     ciErr1  = clSetKernelArg(ckLeafKernel, 0, sizeof(cl_mem), (void*)&cmNode_cache);
     ciErr1 |= clSetKernelArg(ckLeafKernel, 1, sizeof(cl_mem), (void*)&cmModel_cache);
@@ -615,7 +615,7 @@ int _OCLEvaluator::setupContext(void)
     ciErr1 |= clSetKernelArg(ckLeafKernel, 11, sizeof(cl_mem), (void*)&cmScalings_cache);
     ciErr1 |= clSetKernelArg(ckLeafKernel, 12, sizeof(cl_float), (void*)&tempScalar);
     ciErr1 |= clSetKernelArg(ckLeafKernel, 13, sizeof(cl_float), (void*)&tempuFlowThresh);
-    ciErr1 |= clSetKernelArg(ckLeafKernel, 14, sizeof(cl_int), (void*)&sharedMemorySize);
+    ciErr1 |= clSetKernelArg(ckLeafKernel, 14, sizeof(cl_long), (void*)&sharedMemorySize);
 
     ciErr1 |= clSetKernelArg(ckAmbigKernel, 0, sizeof(cl_mem), (void*)&cmNode_cache);
     ciErr1 |= clSetKernelArg(ckAmbigKernel, 1, sizeof(cl_mem), (void*)&cmModel_cache);
@@ -647,7 +647,7 @@ int _OCLEvaluator::setupContext(void)
     ciErr1 |= clSetKernelArg(ckInternalKernel, 12, sizeof(cl_float), (void*)&tempScalar);
     ciErr1 |= clSetKernelArg(ckInternalKernel, 13, sizeof(cl_float), (void*)&tempuFlowThresh);
     ciErr1 |= clSetKernelArg(ckInternalKernel, 14, sizeof(cl_mem), (void*)&cmroot_scalings);
-    ciErr1 |= clSetKernelArg(ckInternalKernel, 15, sizeof(cl_int), (void*)&sharedMemorySize);
+    ciErr1 |= clSetKernelArg(ckInternalKernel, 15, sizeof(cl_long), (void*)&sharedMemorySize);
     ciErr1 |= clSetKernelArg(ckInternalKernel, 16, sizeof(cl_float) * roundCharacters * roundCharacters, NULL);
     ciErr1 |= clSetKernelArg(ckInternalKernel, 17, sizeof(cl_float) * roundCharacters * 4, NULL);
 

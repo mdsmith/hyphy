@@ -13,7 +13,7 @@ __kernel void LeafKernel(    __global float* node_cache,                // argum
                              __global int* scalings,                       // argument 11
                              float scalar,                               // argument 12
                              float uFlowThresh,                           // argument 13
-                             int sharedMemorySize
+                             long sharedMemorySize
                              )
 {
     int gx = get_global_id(0); // pchar
@@ -158,7 +158,7 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
                          float scalar,                          // argument 12
                          float uFlowThresh,                     // argument 13
                          __global int* root_scalings,                // argument 10
-                         int sharedMemorySize,
+                         long sharedMemorySize,
                          __local float* modelCache,
                          __local float* childScratch
                          )
