@@ -46,6 +46,8 @@ __kernel void LeafKernel(    __global float* node_cache,                // argum
             privateParentScratch *= modelCache[gx*roundCharacters + siteState];
     }
     else
+/*
+*/
         privateParentScratch *= model[nodeID*roundCharacters*roundCharacters + gx*roundCharacters + siteState];
     /*
     // This is for the other model array layout
@@ -158,9 +160,7 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
                          float scalar,                          // argument 12
                          float uFlowThresh,                     // argument 13
                          __global int* root_scalings,                // argument 10
-                         long sharedMemorySize,
-                         __local float* modelCache,
-                         __local float* childScratch
+                         long sharedMemorySize
                          )
 {
     // Get thread specific junk going (where it is in the parent cache)
@@ -186,23 +186,26 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
     float sum = 0.0;
     if (sharedMemorySize >= 64*64*4*2)
     {
+        __local float modelCache[64*64];
+        __local float childScratch[64*4];
         int modelID = get_local_id(0);
         while (modelID < 64*64)
         {
             modelCache[modelID] = model[nodeID*roundCharacters*roundCharacters + modelID];
             modelID += get_local_size(0);
         }
-        childScratch[get_local_id(0)] = 
+        childScratch[get_local_id(0)] =
             node_cache[childNodeIndex*sites*roundCharacters + groupStartSite*roundCharacters + get_local_id(0)];
         barrier(CLK_LOCAL_MEM_FENCE);
         if (site < sites && pchar < characters)
             for (int i = 0; i < characters; i++)
-            {       
+            {
                 sum += childScratch[(site-groupStartSite)*roundCharacters + i] * modelCache[roundCharacters*pchar + i];
             }
     }
     else if (sharedMemorySize >= 64*64*4)
     {
+        __local float modelCache[64*64];
         int modelID = get_local_id(0);
         while (modelID < 64*64)
         {
@@ -212,8 +215,8 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
         barrier(CLK_LOCAL_MEM_FENCE);
         if (site < sites && pchar < characters)
             for (int i = 0; i < characters; i++)
-            {       
-                sum += 
+            {
+                sum +=
                     node_cache[childNodeIndex*sites*roundCharacters + site*roundCharacters + i] * 
                     modelCache[roundCharacters*pchar + i];
             }

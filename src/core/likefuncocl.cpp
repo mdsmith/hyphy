@@ -325,7 +325,7 @@ int _OCLEvaluator::setupContext(void)
 #ifndef OCLGPU
     maxLocalSize = 0;
 #endif
-    //maxLocalSize = 0;
+   //maxLocalSize = 0;
 
 /*
     // max number of sites that can be addressed in one work group based on shared memory size 
@@ -648,8 +648,6 @@ int _OCLEvaluator::setupContext(void)
     ciErr1 |= clSetKernelArg(ckInternalKernel, 13, sizeof(cl_float), (void*)&tempuFlowThresh);
     ciErr1 |= clSetKernelArg(ckInternalKernel, 14, sizeof(cl_mem), (void*)&cmroot_scalings);
     ciErr1 |= clSetKernelArg(ckInternalKernel, 15, sizeof(cl_long), (void*)&sharedMemorySize);
-    ciErr1 |= clSetKernelArg(ckInternalKernel, 16, sizeof(cl_float) * roundCharacters * roundCharacters, NULL);
-    ciErr1 |= clSetKernelArg(ckInternalKernel, 17, sizeof(cl_float) * roundCharacters * 4, NULL);
 
     ciErr1 |= clSetKernelArg(ckResultKernel, 0, sizeof(cl_mem), (void*)&cmFreq_cache);
     ciErr1 |= clSetKernelArg(ckResultKernel, 1, sizeof(cl_mem), (void*)&cmProb_cache);
