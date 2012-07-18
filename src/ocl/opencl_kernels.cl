@@ -198,6 +198,7 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
             node_cache[childNodeIndex*sites*roundCharacters + groupStartSite*roundCharacters + get_local_id(0)];
         barrier(CLK_LOCAL_MEM_FENCE);
         if (site < sites && pchar < characters)
+            #pragma unroll
             for (int i = 0; i < characters; i++)
             {
                 sum += childScratch[(site-groupStartSite)*roundCharacters + i] * modelCache[roundCharacters*pchar + i];
@@ -214,6 +215,7 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
         }
         barrier(CLK_LOCAL_MEM_FENCE);
         if (site < sites && pchar < characters)
+            #pragma unroll
             for (int i = 0; i < characters; i++)
             {
                 sum +=
@@ -223,6 +225,7 @@ __kernel void InternalKernel(  __global float* node_cache,              // argum
     }
     else
     {
+        #pragma unroll
         for (int i = 0; i < roundCharacters; i++)
         {
             float childValue = node_cache[childNodeIndex*sites*roundCharacters + site*roundCharacters + i];
