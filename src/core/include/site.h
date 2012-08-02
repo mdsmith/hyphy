@@ -2,27 +2,38 @@
 
 HyPhy - Hypothesis Testing Using Phylogenies.
 
-Copyright (C) 1997-2011
-Primary Development:
-  Sergei L Kosakovsky Pond (sergeilkp@mac.com)
+Copyright (C) 1997-now
+Core Developers:
+  Sergei L Kosakovsky Pond (spond@ucsd.edu)
+  Art FY Poon    (apoon@cfenet.ubc.ca)
+  Steven Weaver (sweaver@ucsd.edu)
+  
+Module Developers:
+	Lance Hepler (nlhepler@gmail.com)
+	Martin Smith (martin.audacis@gmail.com)
+
 Significant contributions from:
   Spencer V Muse (muse@stat.ncsu.edu)
-  Simon DW Frost (sdfrost@ucsd.edu)
-  Art FY Poon    (apoon@biomail.ucsd.edu)
+  Simon DW Frost (sdf22@cam.ac.uk)
 
-This program is free software; you can redistribute it and/or
-modify it under the terms of the GNU General Public License
-as published by the Free Software Foundation; either version 2
-of the License, or (at your option) any later version.
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 */
 
@@ -31,7 +42,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //#pragma once
 #include "sequence.h"
 #include "parser.h"
-#include "hy_lists.h"
+#include "simplelist.h"
+#include "list.h"
+#include "avllist.h"
+#include "avllistx.h"
+#include "avllistxl.h"
 #include "stdlib.h"
 
 #define   NUCLEOTIDEDATA 0
@@ -466,6 +481,33 @@ public:
     // added this function to cache repeated character code -> string conversions
     // and to skip returning temp objects but simply writing to buffer
 
+    /**
+    * Find all unique sequences in the data filter. 
+    *
+    * \n Usage: FindDuplicateSequences(uniqueIndex, instanceCount, true);
+    * @author SLKP
+    * @param indices For each sequence - the list of indices corresponding to the unique strings
+                     For example, if sequence 1 == sequence 3 and sequence 4 == sequence 5 this list 
+                     will contain 0,1,3 
+    * @param map The index of the unique string to which the current string is mapped
+                     For example, if sequence 1 == sequence 3 and sequence 4 == sequence 5 this list 
+                     will contain 0,1,0,2,2 
+    * @param counts  The number of copies for each unique string found
+                     For example, if sequence 1 == sequence 3 and sequence 4 == sequence 5 this list 
+                     will contain 2,1,2
+    * @param strict  Controls is the strings must match exactly (0), exactly + gap (1), via the superset rule (2) or via the partial match rule (3).
+                     Nucleotide letters A and - (or ?) (IUPAC code for A or G) will count as mismatched for mode 0 and matched for mode 1.
+                     Nucleotide letters A and R (IUPAC code for A or G) will count as mismatched for mode 0 and matched for
+                     modes 2 and 3 because R is a superset of A. (note that R matches R in all modes, even though the letter is
+                     an ambiguous nucleotide).
+                     Nucleotide letters R (A or G) and M (A or C) will match under mode 3 (because they both encode A as an option), 
+                     but not under modes 0-2. 
+                     Match in mode (0) => match in mode (1) => match in mode (2) => match in mode (3).
+                    
+    * @return The number of unique sequences. 
+    */
+    unsigned long                   FindUniqueSequences      (_SimpleList&, _SimpleList&, _SimpleList&, short = 0);
+
 
     long                            CorrectCode                 (long code);
     virtual  bool                   CompareTwoSites             (unsigned long, unsigned long,unsigned long);
@@ -489,10 +531,10 @@ public:
     /*
         20090325: SLKP
         a function that takes per pattern values (source, argument 1)
-        and maps them ontp sites into target (argument 2)
+        and maps them onto sites into target (argument 2)
         the third argument is 0 to treat the pointers as _Parameter*
         1 to treat them as long*
-        2 and to treat them as _Parameter and long, respetively
+        2 and to treat them as _Parameter* and long*, respetively
         20090929: SLKP
         the fourth argument is used to speficy a padding-size,
             all values from the filter size up to that value are set to 1 (for mode 0) and 0 (for mode 1)

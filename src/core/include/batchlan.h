@@ -2,27 +2,38 @@
 
 HyPhy - Hypothesis Testing Using Phylogenies.
 
-Copyright (C) 1997-2011
-Primary Development:
-  Sergei L Kosakovsky Pond (sergeilkp@mac.com)
+Copyright (C) 1997-now
+Core Developers:
+  Sergei L Kosakovsky Pond (spond@ucsd.edu)
+  Art FY Poon    (apoon@cfenet.ubc.ca)
+  Steven Weaver (sweaver@ucsd.edu)
+  
+Module Developers:
+	Lance Hepler (nlhepler@gmail.com)
+	Martin Smith (martin.audacis@gmail.com)
+
 Significant contributions from:
   Spencer V Muse (muse@stat.ncsu.edu)
-  Simon DW Frost (sdfrost@ucsd.edu)
-  Art FY Poon    (apoon@biomail.ucsd.edu)
+  Simon DW Frost (sdf22@cam.ac.uk)
 
-This program is free software; you can redistribute it and/or
-modify it under the terms of the GNU General Public License
-as published by the Free Software Foundation; either version 2
-of the License, or (at your option) any later version.
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 */
 
@@ -32,31 +43,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "parser.h"
 #include "site.h"
-#include "stdio.h"
+#include "trie.h"
+#include <stdio.h>
 
-#define   BL_FUNCTION_ALWAYS_UPDATE     0
-#define   BL_FUNCTION_NORMAL_UPDATE     1
-
-
-//!  Batch Language 'Object' type codes
-/*!
-     20110608 SLKP introduced.
-
-     Bit flag style type tags and masks
-     This is primarily to be used for object retrieval
-     using the _HYRetrieveBLObjectByName function
-*/
-
-#define   HY_BL_NOT_DEFINED             0
-#define   HY_BL_DATASET                 1
-#define   HY_BL_DATASET_FILTER          2
-#define   HY_BL_LIKELIHOOD_FUNCTION     4
-#define   HY_BL_SCFG                    8
-#define   HY_BL_BGM                     16
-#define   HY_BL_MODEL                   32
-#define   HY_BL_HBL_FUNCTION            64
-
-#define   HY_BL_ANY                     1023
 
 
 //____________________________________________________________________________________
@@ -67,6 +56,18 @@ struct    _CELInternals {
     _SimpleList       varList,
                       storeResults;
 
+};
+
+//____________________________________________________________________________________
+struct    _HBLCommandExtras {
+    long                cut_string;
+    char                extract_condition_separator;
+    _SimpleList         extract_conditions;
+    _List               command_invocation;
+    
+    bool                do_trim,
+                        is_assignment,
+                        needs_verb;
 };
 
 //____________________________________________________________________________________
@@ -159,21 +160,18 @@ public:
     void      ExecuteCase0   (_ExecutionList&);
     void      ExecuteCase4   (_ExecutionList&);
     void      ExecuteCase5   (_ExecutionList&);
-    void      ExecuteDataFilterCases
-    (_ExecutionList&);
+    void      ExecuteDataFilterCases (_ExecutionList&);
     void      ExecuteCase8   (_ExecutionList&);
     void      ExecuteCase11  (_ExecutionList&);
     void      ExecuteCase12  (_ExecutionList&);
     void      ExecuteCase17  (_ExecutionList&);
     void      ExecuteCase21  (_ExecutionList&);
-    void      ExecuteCase24  (_ExecutionList&);
     void      ExecuteCase25  (_ExecutionList&, bool = false); // fscanf
     void      ExecuteCase26  (_ExecutionList&); // ReplicateConstraint
     void      ExecuteCase31  (_ExecutionList&); // model construction
     void      ExecuteCase32  (_ExecutionList&); // list selection handler
     void      ExecuteCase33  (_ExecutionList&); // index string selector
     void      ExecuteCase34  (_ExecutionList&); // CovarianceMatrix
-    void      ExecuteCase35  (_ExecutionList&); // SetParameter
     void      ExecuteCase36  (_ExecutionList&); // OpenDataPanel
     void      ExecuteCase37  (_ExecutionList&); // GetInformation
     void      ExecuteCase38  (_ExecutionList&, bool); // Reconstruct Ancestors
@@ -186,7 +184,6 @@ public:
     void      ExecuteCase45  (_ExecutionList&); // MPIReceive
     void      ExecuteCase46  (_ExecutionList&); // GetDataInfo
     void      ExecuteCase47  (_ExecutionList&); // ConstructStateCounter
-    void      ExecuteCase49  (_ExecutionList&); // LFCompute
     void      ExecuteCase51  (_ExecutionList&); // GetURL
     void      ExecuteCase52  (_ExecutionList&); // Simulate
     void      ExecuteCase53  (_ExecutionList&); // DoSQL
@@ -194,13 +191,22 @@ public:
     void      ExecuteCase55  (_ExecutionList&); // AlignSequences
     void      ExecuteCase57  (_ExecutionList&); // GetNeutralNull
     void      ExecuteCase58  (_ExecutionList&); // Profile Code
-    void      ExecuteCase59  (_ExecutionList&); // DeleteObject
-    void      ExecuteCase60  (_ExecutionList&); // RequireVersion
     void      ExecuteCase61  (_ExecutionList&); // SCFG
     void      ExecuteCase63  (_ExecutionList&); // NN; currently not functional
     void      ExecuteCase64  (_ExecutionList&); // BGM
-    void      ExecuteCase65  (_ExecutionList&); // assert
-
+    
+    bool      HandleHarvestFrequencies              (_ExecutionList&);
+    bool      HandleOptimizeCovarianceMatrix        (_ExecutionList&, bool);
+    bool      HandleComputeLFFunction               (_ExecutionList&);
+    bool      HandleSelectTemplateModel             (_ExecutionList&);
+    bool      HandleUseModel                        (_ExecutionList&);
+    bool      HandleSetParameter                    (_ExecutionList&);
+    bool      HandleAssert                          (_ExecutionList&);
+    bool      HandleRequireVersion                  (_ExecutionList&);
+    bool      HandleDeleteObject                    (_ExecutionList&);
+    bool      HandleClearConstraints                (_ExecutionList&);
+    bool      HandleMolecularClock                  (_ExecutionList&);
+    
     static  _String   FindNextCommand       (_String&, bool = false);
     // finds & returns the next command block in input
     // chops the input to remove the newly found line
@@ -208,7 +214,19 @@ public:
     static  long      ExtractConditions     (_String& , long , _List&, char delimeter = ';', bool includeEmptyConditions = true);
     // used to extract the loop, if-then conditions
 
-    static  bool      BuildFor              (_String&, _ExecutionList&);
+    static  bool      ExtractValidateAddHBLCommand (_String& current_stream, const long command_code, _List* pieces, _HBLCommandExtras* command_spec, _ExecutionList& command_list);
+    /**
+     * Take a command from the current command stream, extract it, make an _ElementaryCommand and add it to the execution list
+     * @param current_stream -- the current command text stream
+     * @param command_code   -- the numerical code (from HY_HBL_COMMAND_*)
+     * @param pieces         -- the list of parameters extracted from the () part of the command
+     * @param command_spec   -- command specification structure
+     * @param command_list   -- the command list object to append the command to
+     * @return success/failure. 
+     */
+   
+
+    static  bool      BuildFor              (_String&, _ExecutionList&, _List&);
     // builds the for loop starting from
     // the beginning of input
     // this will process the loop header
@@ -220,7 +238,7 @@ public:
     // this will process the loop header
     // and the entire scope afterwards
 
-    static  bool      BuildWhile            (_String&, _ExecutionList&);
+    static  bool      BuildWhile            (_String&, _ExecutionList&, _List&);
     // builds the while(..) construct starting from
     // the beginning of input
     // this will process the loop header
@@ -268,15 +286,9 @@ public:
     (_String&, _ExecutionList&);
     // construct a replicate constraint command
 
-    static  bool      ConstructOptimize     (_String&, _ExecutionList&);
-
-
     static  bool      ConstructLF           (_String&, _ExecutionList&);
     // construct a likelihood function
 
-
-    static  bool      ConstructHarvestFreq  (_String&, _ExecutionList&);
-    // construct a fprintf command
 
     static  bool      ConstructFunction     (_String&, _ExecutionList&);
     // construct a fprintf command
@@ -293,19 +305,11 @@ public:
     static  bool      ConstructChoiceList   (_String&, _ExecutionList&);
     // construct a category variable
 
-    static  bool      ConstructClearConstraints (_String&, _ExecutionList&);
-    // construct a clear constraints command
-
-    static  bool      ConstructMolecularClock (_String&, _ExecutionList&);
-    // construct a molecular clock constraint
-
     static  bool      ConstructCategoryMatrix (_String&, _ExecutionList&);
     // construct a category matrix for the optimized like func
 
     static  bool      ConstructOpenDataPanel (_String&, _ExecutionList&);
     // open data panel with given settings
-
-    static  bool      ConstructUseMatrix    (_String&, _ExecutionList&);
 
     static  bool      ConstructOpenWindow   (_String&, _ExecutionList&);
 
@@ -328,8 +332,6 @@ public:
 
     static  bool      ConstructStateCounter (_String&, _ExecutionList&);
 
-    static  bool      SetDialogPrompt       (_String&, _ExecutionList&);
-
     static  bool      ConstructGetURL       (_String&, _ExecutionList&);
 
     static  bool      ConstructDoSQL        (_String&, _ExecutionList&);
@@ -344,9 +346,6 @@ public:
     (_String&, _ExecutionList&);
 
     static  bool      ConstructDeleteObject
-    (_String&, _ExecutionList&);
-
-    static  bool      ConstructRequireVersion
     (_String&, _ExecutionList&);
 
     static  bool      ConstructSCFG         (_String&, _ExecutionList&);
@@ -423,6 +422,7 @@ dataSetNamesList,
 likeFuncList,
 dataSetFilterList,
 dataSetFilterNamesList,
+templateModelList,
 scfgNamesList,
 scfgList,
 
@@ -448,17 +448,18 @@ modelTypeList,
 modelFrequenciesIndices,
 listOfCompiledFormulae;
 
-
 extern  _String
 
 getDString,
 getFString,
+tempFString,
 baseDirectory,
 libDirectory,
 useLastFString,
 mpiMLELFValue,
 lf2SendBack,
 hyphyBaseDirectory,
+hyphyLibDirectory,
 platformDirectorySeparator,
 defFileNameValue,
 defFileString,
@@ -529,7 +530,15 @@ errorReportFormatExpression     ,
 errorReportFormatExpressionStr  ,
 errorReportFormatExpressionStack,
 errorReportFormatExpressionStdin,
-
+lastModelUsed                   ,
+deferConstrainAssignment        ,
+bgmData                         ,
+bgmScores                       ,
+bgmGraph                        ,
+bgmNodeOrder                    ,
+bgmConstraintMx                 ,
+bgmParameters                   ,
+assertionBehavior               ,
 #ifdef      __HYPHYMPI__
 mpiNodeID                       ,
 mpiNodeCount                    ,
@@ -539,9 +548,14 @@ hfCountGap                      ;
 
 extern  _ExecutionList              *currentExecutionList;
 
-extern  _AVLList
-loadedLibraryPaths;
+extern  _AVLList                    loadedLibraryPaths;
+extern  _AVLListX                   _HY_HBLCommandHelper;
+                                    
+extern  _Trie                       _HY_ValidHBLExpressions;
 
+extern  long                        globalRandSeed,
+                                    matrixExpCount;
+ 
 
 long    FindDataSetName              (_String&);
 long    FindDataSetFilterName        (_String&);
@@ -584,7 +598,7 @@ void    KillLFRecord                 (long, bool = true);
 void    KillDataSetRecord            (long);
 void    KillModelRecord              (long);
 void    KillExplicitModelFormulae    (void);
-bool    PushFilePath                 (_String&);
+bool    PushFilePath                 (_String&, bool = true);
 void    PopFilePath                  (void);
 _Matrix*CheckMatrixArg               (_String*, bool);
 _AssociativeList *
@@ -592,11 +606,13 @@ CheckAssociativeListArg      (_String*);
 void    RetrieveModelComponents      (long, _Matrix*&,     _Matrix*&, bool &);
 void    RetrieveModelComponents      (long, _Variable*&, _Variable*&, bool &);
 bool    IsModelReversible            (long);
+void    ReadModelList                (void);
 
 _PMathObj
 ProcessAnArgumentByType      (_String*, _VariableContainer*, long);
 
 void    _HBL_Init_Const_Arrays       (void);
+
 void    ReturnCurrentCallStack       (_List&, _List&);
 
 /**
@@ -615,12 +631,18 @@ void    ReturnCurrentCallStack       (_List&, _List&);
     @param   type [in] which types of objects will be searched.
                  [out] which type of object was retrieved (HY_BL_NOT_DEFINED if not found)
     @param   index (if not nil) will receive the index of the found object in the corresponding array
+    @param   errMsg if set to True, will cause the function to report an error if no object of corresponding type could be found
+    @param   tryLiteralLookup if set to True, will cause the function to, upon a failed lookup, to also try interpreting name as a string variable ID
     @return  pointer to the retrieved object or nil if not found
     @author  SLKP
-    @version 20110608
+    @version 20120324
 */
 
-BaseRef _HYRetrieveBLObjectByName    (_String& name, long& type, long* index = nil);
+BaseRef _HYRetrieveBLObjectByName       (_String& name, long& type, long* index = nil, bool errMsg = false, bool tryLiteralLookup = false);
+_String _HYHBLTypeToText                (long type);
+_String _HYStandardDirectory            (const unsigned long);
+
+_HBLCommandExtras* _hyInitCommandExtras (const long = 0, const long = 0, const _String = empty, const char = ';', const bool = true, const bool = false, const bool = false, _SimpleList* = nil);
 
 
 extern  bool                        numericalParameterSuccessFlag;

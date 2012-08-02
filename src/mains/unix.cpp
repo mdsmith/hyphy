@@ -6,19 +6,24 @@ Copyright (C) 1997-2002
 Sergei L Kosakovsky Pond (sergeilkp@mac.com)
 Spencer V Muse (muse@stat.ncsu.edu)
 
-This program is free software; you can redistribute it and/or
-modify it under the terms of the GNU General Public License
-as published by the Free Software Foundation; either version 2
-of the License, or (at your option) any later version.
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 */
 
@@ -75,8 +80,6 @@ long    DisplayListOfChoices        (void);
 void    ProcessConfigStr            (_String&);
 void    ReadInPostFiles             (void);
 long    DisplayListOfPostChoices    (void);
-void    mpiOptimizerLoop            (int, int);
-void    mpiNormalLoop               (int, int, _String*);
 
 
 extern  long
@@ -97,7 +100,8 @@ bool    usePostProcessors = false,
         updateMode       = false,
         pipeMode         = false,
         dropIntoDebugMode = false,
-        logInputMode   = false;
+        logInputMode   = false,
+        needExtraNL    = false;
 
 char    prefFileName[] = ".hyphyinit";
 
@@ -126,12 +130,10 @@ void    ReadInTemplateFiles(void)
         baseArgDir = *((_String*)pathNames(0));
     }
 
-    fseek (modelList,0,SEEK_END);
-    unsigned long  fLength = ftell(modelList);
-    if (fLength) {
-        rewind (modelList);
-        _String theData (fLength);
-        fread (theData.getStr(),sizeof (char), fLength, modelList);
+    _String theData (modelList);
+    fclose (modelList);
+    
+    if (theData.sLength) {
         _ElementaryCommand::ExtractConditions(theData,0,availableTemplateFiles);
         for (long i = 0; i<availableTemplateFiles.countitems(); i++) {
             _String* thisString = (_String*)availableTemplateFiles(i);
@@ -159,17 +161,17 @@ void    ReadInPostFiles(void)
 
     _String fileIndex;
     FILE* modelList = fopen (fileIndex.getStr(),"r");
-    fileIndex = baseArgDir &"TemplateBatchFiles/postprocessors.lst";
+    fileIndex = libArgDir &"TemplateBatchFiles/postprocessors.lst";
     modelList = fopen (fileIndex.getStr(),"r");
+    
+    if (modelList == NULL) {
+        return;
+    }
 
-    fseek (modelList,0,SEEK_END);
-    unsigned long  fLength = ftell(modelList);
-    fseek (modelList,0,SEEK_END);
-    fLength = ftell(modelList);
-    if (fLength) {
-        rewind (modelList);
-        _String theData (fLength);
-        fread (theData.getStr(),sizeof (char), fLength, modelList);
+    _String theData (modelList);
+    fclose (modelList);
+    
+    if (theData.sLength) {
         _ElementaryCommand::ExtractConditions(theData,0,availablePostProcessors);
         for (long i = 0; i<availablePostProcessors.countitems(); i++) {
             _String* thisString = (_String*)availablePostProcessors(i);
@@ -187,7 +189,7 @@ void    ReadInPostFiles(void)
                 fileIndex = *((_String*)pathNames(0)) &"TemplateBatchFiles/" & *(_String*)thisFile(1);
                 FILE* dummyFile = fopen (fileIndex,"r");
                 if (!dummyFile) {
-                    fileIndex =baseArgDir&"TemplateBatchFiles/"& *(_String*)thisFile(1);
+                    fileIndex =libArgDir&"TemplateBatchFiles/"& *(_String*)thisFile(1);
                     dummyFile = fopen (fileIndex,"r");
                 }
                 if (dummyFile) {
@@ -368,8 +370,8 @@ long    DisplayListOfPostChoices (void)
                 choice = -1;
             }
         }
-        return choice;
     }
+    return choice;
 }
 
 
@@ -449,6 +451,15 @@ void    SetStatusLine               (_String s)
     }
 #endif
 
+}
+
+//__________________________________________________________________________________
+void    SetStatusLineUser   (_String s)
+{
+    setvbuf(stdout, NULL, _IONBF, 0);
+    BufferToConsole("\33[2K\r");
+    StringToConsole(s);
+    needExtraNL = true;
 }
 
 //__________________________________________________________________________________
@@ -629,7 +640,8 @@ int main (int argc, char* argv[])
         //if (mpiParallelOptimizer || mpiPartitionOptimizer)
         //  mpiOptimizerLoop (rank, size);
         //else
-        mpiNormalLoop (rank, size, baseDir);
+        _String defaultBaseDirectory = *(_String*)pathNames(0);
+        mpiNormalLoop (rank, size, defaultBaseDirectory);
         /*argFile = "SHUTDOWN_CONFIRM";
         MPISendString (argFile, senderID);*/
     } else {

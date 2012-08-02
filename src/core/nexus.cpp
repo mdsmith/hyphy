@@ -6,26 +6,31 @@ Copyright (C) 1997-2009
   Sergei L Kosakovsky Pond (spond@ucsd.edu)
   Art FY Poon              (apoon@cfenet.ubc.ca)
 
-This program is free software; you can redistribute it and/or
-modify it under the terms of the GNU General Public License
-as published by the Free Software Foundation; either version 2
-of the License, or (at your option) any later version.
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 */
 #include "site.h"
 #include "string.h"
 #include "ctype.h"
 #include "stdlib.h"
-#include "hy_lists.h"
+#include "list.h"
 #include "batchlan.h"
 
 #include "math.h"
@@ -54,7 +59,7 @@ void    ProcessNexusTaxa            (FileState&,long, FILE*, _String&, _DataSet&
 void    ProcessNexusTrees           (FileState&, long, FILE*, _String&, _DataSet&);
 bool    FindNextNexusToken          (FileState& fState, FILE* f, _String& CurrentLine, long pos);
 bool    SkipUntilNexusBlockEnd      (FileState& fState, FILE* f, _String& CurrentLine, long pos);
-bool    ReadNextNexusStatement      (FileState&, FILE* , _String&, long, _String&, bool, bool = true, bool = true, bool = false, bool = false);
+bool    ReadNextNexusStatement      (FileState&, FILE* , _String&, long, _String&, bool, bool = true, bool = true, bool = false, bool = false, bool = false);
 long    ReadNextNexusEquate         (FileState&, FILE* , _String&, long, _String&, bool = false, bool = true);
 void    NexusParseEqualStatement    (_String&);
 
@@ -121,7 +126,7 @@ void    NexusParseEqualStatement (_String& source)
 }
 //_________________________________________________________
 
-bool    ReadNextNexusStatement (FileState& fState, FILE* f, _String& CurrentLine, long pos, _String& blank, bool stopOnSpace, bool stopOnComma, bool stopOnQuote, bool NLonly, bool preserveSpaces)
+bool    ReadNextNexusStatement (FileState& fState, FILE* f, _String& CurrentLine, long pos, _String& blank, bool stopOnSpace, bool stopOnComma, bool stopOnQuote, bool NLonly, bool preserveSpaces, bool preserveQuotes)
 {
     bool done          = false,
          insideLiteral = false,
@@ -134,7 +139,7 @@ bool    ReadNextNexusStatement (FileState& fState, FILE* f, _String& CurrentLine
         while (newPos<CurrentLine.sLength) {
             c = CurrentLine.sData[newPos];
             if (isspace(c)) {
-                if (stopOnSpace && startedReading && (!insideLiteral) && (!NLonly || NLonly && (c==10 || c==13))) {
+                if (stopOnSpace && startedReading && (!insideLiteral) && (!NLonly || (NLonly && (c==10 || c==13)))) {
                     done = true;
                     break;
                 } else {
@@ -151,7 +156,7 @@ bool    ReadNextNexusStatement (FileState& fState, FILE* f, _String& CurrentLine
                     done = true;
                     newPos++;
                     break;
-                } else if (c=='\'' || c=='"' ) {
+                } else if (! preserveQuotes && (c=='\'' || c=='"') ) {
                     if (c=='\'') {
                         if (newPos+1<CurrentLine.sLength)
                             // check for a double quote
@@ -414,7 +419,7 @@ void    ProcessNexusAssumptions (FileState& fState, long pos, FILE*f, _String& C
                                 for (long k=0; k<blank.sLength; k++) {
                                     char ch = blank.sData[k];
 
-                                    if (ch>='0'&&ch<='9' || ch=='.') {
+                                    if ((ch>='0' && ch<='9') || ch=='.') {
                                         if (spoolInto2nd) {
                                             numberTwo = numberTwo & ch;
                                         } else if (spoolInto3rd) {
@@ -636,7 +641,7 @@ void    ProcessNexusTrees (FileState& fState, long pos, FILE*f, _String& Current
             } while (1);
         } else if (CurrentLine.beginswith (key2)) { // actual tree strings & idents
             _String blank ((unsigned long)10, true);
-            if (!ReadNextNexusStatement (fState, f, CurrentLine, key2.sLength, blank, false, false, false,false,false)) {
+            if (!ReadNextNexusStatement (fState, f, CurrentLine, key2.sLength, blank, false, false, false,false,false, true)) {
                 errMsg = _String("TREE construct not followed by ';'.");
                 ReportWarning (errMsg);
                 done = true;

@@ -1077,21 +1077,37 @@ else
                             }
                             else // MEME
                             {
+                            
+                                fprintf (stdout, "Save individual fit files to disk (CAUTION: will create 3x the number of sites files, [Y/N])");
+                                fscanf  (stdin, "String", saveFiles);
+                                if ((saveFiles[0]&&1) == "Y") {
+                                    SetDialogPrompt ("Enter a prefix path for the fit files. Each file will be suffixed as .site.[alt|null]");
+                                    fprintf (PROMPT_FOR_FILE, CLEAR_FILE);
+                                    SAVE_FIT_TO_FILE = LAST_FILE_PATH;
+                                }
+                                else {
+                                    SAVE_FIT_TO_FILE = "";
+                                }
+                            
                                 // save AC, AT, CG, CT and GT
                                 saveNucs = {{AC__,AT__,CG__,CT__,GT__}};
                                 LoadFunctionLibrary("BranchSiteTemplate");
                                 
                                 ClearConstraints (codonTree,AC,AT,CG,CT,GT); 
+                                LoadFunctionLibrary ("CodonTools.def");
     
                                 ASSUME_REVERSIBLE_MODELS = 1;
                                  
-                                OPTIMIZATION_METHOD = 0;
-                                USE_LAST_RESULTS   = 1;
+                                OPTIMIZATION_METHOD     = 0;
+                                USE_LAST_RESULTS        = 1;
+                                
                                 fprintf (stdout, "\n[RETUNING BRANCH LENGTHS AND NUCLEOTIDE RATES UNDER THE CODON MODEL]\n");
                                 
                                 T0 = Time(1);
                                 
+                                //AUTO_PARALLELIZE_OPTIMIZE = 4;
                                 Optimize (codonLF, lf);
+                                //AUTO_PARALLELIZE_OPTIMIZE = 0;
                                 
                                 OPTIMIZATION_TIME_HARD_LIMIT = (Time(1)-T0)*4;
                                 
@@ -1115,6 +1131,10 @@ else
                                 Model       MGFEL   =         (MGMatrix2,codonFrequencies,0);
                                 Tree        felTree =  treeString;
                                 
+                                Model 		MGLocalMix		=		  ("Exp(MGMatrix1)*lmp+Exp(MGMatrix2)*(1-lmp)",codonFrequencies,EXPLICIT_FORM_MATRIX_EXPONENTIAL);
+                                Tree        perBranchTree 			= treeString;
+
+
                                 global      sFactor   =  1;
                                 global      nsFactor1 =  1;
                                 nsFactor1               :< 1;
@@ -1128,8 +1148,8 @@ else
                                 sFactor   :> 0;
 
                                 doneSites    = {filteredData.unique_sites,8};
-                                fullSites    = {filteredData.sites,8};						
-                                labels       = {{"beta1","beta2","weight1","weight2","Length_scaler","LRT","p-value","Full Log(L)"}};
+                                fullSites    = {filteredData.sites,9};						
+                                labels       = {{"beta1","beta2","weight1","weight2","Length_scaler","LRT","p-value","q-value","Full Log(L)"}};
 
  								ReplicateConstraint ("this1.?.alpha:=sFactor*this2.?.synRate__",siteTree,codonTree);
  								ReplicateConstraint ("this1.?.beta1:=nsFactor1*sFactor*this2.?.synRate__",siteTree,codonTree);
@@ -1137,6 +1157,8 @@ else
                                 
  								ReplicateConstraint ("this1.?.alpha:=sFactor*this2.?.synRate__",felTree,codonTree);
  								ReplicateConstraint ("this1.?.beta2:=nsFactor2*this2.?.synRate__",felTree,codonTree);
+						   
+						        bySiteBranchReports = {};
                             }
 						}
 					
@@ -1174,8 +1196,6 @@ else
                                         }
                                         
  										Optimize (site_res, siteLikelihood);
-                                       // LIKELIHOOD_FUNCTION_OUTPUT = 7;
-                                       // fprintf ("/Users/sergei/Desktop/alt.fit", CLEAR_FILE, siteLikelihood);
                                         
                                         if (cOptions == 10)
                                         {
@@ -1184,9 +1204,10 @@ else
                                             doneSites[siteMap][2] = mixingP;
                                             doneSites[siteMap][6] = 1-mixingP;                                        
                                             doneSites[siteMap][7] = sFactor;
-                                            
+                                                                                        
                                             if (nsFactor2 > sFactor && mixingP < 1) // only test for selection if the point estimate is > 1
                                             {
+                                                bySiteBranchReports [siteMap] = obtainBranchWiseEBEstimates (sFactor, nsFactor1, nsFactor2, mixingP,filterString);
                                                 omega2     = 1;
                                                 nsFactor2 := omega2 * sFactor;
                                                 if (sFactor == 0)
@@ -1237,7 +1258,7 @@ else
                                 
                                 if (cOptions == 10)
                                 {
-                                    ReportSiteMEME (siteCount, siteMap);
+                                    ReportSiteMEME (siteCount, siteMap, -1);
                                 }
                                 else
                                 {
@@ -1255,7 +1276,7 @@ else
                                 toDoList         = {};
                                 
                                 lfSpawnDone      = 0;
-                                debugVerboseFlag = 0;
+                                //debugVerboseFlag = 0;
                                 
                                 // populate the initial queue of things to do
                                 
@@ -1293,6 +1314,32 @@ else
                                 {
                                     fprintf (stdout, toDoList);
                                 }   
+                                GetString (funcInfo, obtainBranchWiseEBEstimatesMPI, -1);
+                                funcText = "function " + funcInfo["ID"] + "(" + Join (",", funcInfo["Arguments"]) + ") { " + funcInfo ["Body"] + "}";
+
+                                //debugVerboseFlag = 1;
+        
+                                _memeExtraNull = "SAVE_FIT_TO_FILE = \"`SAVE_FIT_TO_FILE`\";
+                                if (Abs (SAVE_FIT_TO_FILE)) {
+                                    LIKELIHOOD_FUNCTION_OUTPUT = 7;
+                                    saveLFTo = SAVE_FIT_TO_FILE + \".\" + siteID + jobSuffix;
+                                    fprintf (saveLFTo, CLEAR_FILE, siteLikelihood);
+                                    LIKELIHOOD_FUNCTION_OUTPUT = 2;
+                                }
+                                ";
+
+                                 _memeExtra = _memeExtraNull + funcText + 
+                                "_OBSERVED_S_ = " + _OBSERVED_S_ + ";\n" +
+                                "_OBSERVED_NS_ = " + _OBSERVED_NS_ + ";\n" +
+                                "MPI_NEXUS_FILE_RETURN = {};
+                                 MPI_NEXUS_FILE_RETURN [\"MLES\"]     = siteLikelihood_MLES;
+                                 _vtr = {{\"nsFactor1\", \"nsFactor2\", \"sFactor\", \"mixingP\"}};
+                                 MPI_NEXUS_FILE_RETURN [\"VALUES\"]   = {};
+                                 for (_k = 0; _k < Columns (_vtr); _k += 1) {
+                                    (MPI_NEXUS_FILE_RETURN [\"VALUES\"])[_vtr[_k]] = Eval (_vtr[_k]);
+                                 }
+                                 MPI_NEXUS_FILE_RETURN [\"BRANCHES\"] = obtainBranchWiseEBEstimatesMPI (sFactor, nsFactor1, nsFactor2, mixingP);
+                                ";
                                 while (MPISendJobMEME ()) 
                                 {
                                 
@@ -1395,15 +1442,29 @@ else
                             }		
                             
 							fprintf (stdout, "\n\n\n");
-							for (siteCount = 0; siteCount < filteredData.sites; siteCount = siteCount+1)
-							{
-								siteMap = dupInfo[siteCount];
-                                if (cOptions == 10)
-                                {
-                                    ReportSiteMEME (siteCount, siteMap);
+                            if (cOptions == 10) {
+                                qValues = {filteredData.sites,2};
+                                
+                                for (siteCount = 0; siteCount < filteredData.sites; siteCount += 1){
+                                    qValues [siteCount][0] = siteCount;
+                                    qValues [siteCount][1] = doneSites[dupInfo[siteCount]][4];
                                 }
-                                else
+                                
+                                qValues = qValues % 1;
+                                for (siteCount = 0; siteCount < filteredData.sites; siteCount += 1){
+                                    qValues [siteCount][1] = Min(1,qValues [siteCount][1] * (filteredData.sites)/(1+siteCount));
+                                }
+                                
+                                qValues = qValues % 0;
+                                for (siteCount = 0; siteCount < filteredData.sites; siteCount += 1) {
+                                    ReportSiteMEME (siteCount, dupInfo[siteCount], qValues[siteCount][1]);				 
+                                }
+                                
+                            
+                            } else {
+                                for (siteCount = 0; siteCount < filteredData.sites; siteCount += 1)
                                 {
+                                    siteMap = dupInfo[siteCount];
                                     ReportSite2 (siteCount, siteMap);				 
                                 }
                             }
@@ -1453,7 +1514,10 @@ else
 					SetDialogPrompt ("Save site-by-site LRT results to:");
 					
 					siteCount = Columns (fullSites);
+					
 					fprintf (PROMPT_FOR_FILE,CLEAR_FILE,labels[0]);
+					csvFILE = LAST_FILE_PATH;
+					
 					
 					outString = "";
 					outString * 8192;
@@ -1472,9 +1536,26 @@ else
 						}
 					}
 					outString * 0;
-					fprintf (LAST_FILE_PATH, outString);
+					fprintf (csvFILE, outString);
 					outString = 0;
-				}
+					
+                    if (cOptions == 10) {
+					    byBranchResultsFile = LAST_FILE_PATH + ".branches";
+					    fprintf (byBranchResultsFile, CLEAR_FILE, KEEP_OPEN, Format (codonTree,1,1), "\n<<<<<<<<<<<<<<<<<<<<<<<<\n", "Site,Branch,PosteriorProbability,EmpiricalBayesFactor,SynSubs,NonsynSubs");
+                        for (siteCount = 0; siteCount < Rows (fullSites); siteCount = siteCount+1)
+                        {
+                            siteMap = dupInfo[siteCount];
+                            if (Abs (bySiteBranchReports [siteMap])) {
+                                bNames = Rows (bySiteBranchReports [siteMap]);
+                                for (branchCount = 0; branchCount < Columns(bNames); branchCount += 1) {
+                                    fprintf (byBranchResultsFile, "\n", siteCount+1, ",", bNames[branchCount], ",", Join (",",(bySiteBranchReports [siteMap])[bNames[branchCount]]));
+                                }
+                            }
+                        }
+                        fprintf (byBranchResultsFile, CLOSE_FILE);
+                       			
+                    }
+                }
 			}
 		}
 	}

@@ -9,27 +9,38 @@ Written by SL Kosakovsky Pond; June 2007
 Dedicated to Comet (http://www.hyphy.org/comet.jpg)
 ?/?/1999-06/05/2007
 
-Copyright (C) 1997-2007
-Primary Development:
-  Sergei L Kosakovsky Pond (sergeilkp@mac.com)
+Copyright (C) 1997-now
+Core Developers:
+  Sergei L Kosakovsky Pond (spond@ucsd.edu)
+  Art FY Poon    (apoon@cfenet.ubc.ca)
+  Steven Weaver (sweaver@ucsd.edu)
+  
+Module Developers:
+	Lance Hepler (nlhepler@gmail.com)
+	Martin Smith (martin.audacis@gmail.com)
+
 Significant contributions from:
   Spencer V Muse (muse@stat.ncsu.edu)
-  Simon DW Frost (sdfrost@ucsd.edu)
-  Art FY Poon    (apoon@biomail.ucsd.edu)
+  Simon DW Frost (sdf22@cam.ac.uk)
 
-This program is free software; you can redistribute it and/or
-modify it under the terms of the GNU General Public License
-as published by the Free Software Foundation; either version 2
-of the License, or (at your option) any later version.
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
 
-You should have received a copy of the GNU General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 */
 
@@ -52,6 +63,8 @@ _String _tHYPHYAskFor           ("_THyPhyAskFor"),
 
 long    _tHYPHYDone             = 0;
 double  _tHYPHYValue            = 0.0;
+
+extern long systemCPUCount;
 
 _THyPhy * globalInterfaceInstance = nil;
 
@@ -200,23 +213,44 @@ _THyPhy::~_THyPhy           (void)
     if (globalInterfaceInstance == this) {
         globalInterfaceInstance = nil;
     }
+
+    PurgeAll(true);
+    GlobalShutdown();
 }
 
 //_________________________________________________________
 
 void _THyPhy::InitTHyPhy (_ProgressCancelHandler* mHandler, const char* baseDirPath, long cpuCount)
 {
-    systemCPUCount                      = cpuCount;
+    char dirSlash = GetPlatformDirectoryChar ();
+    systemCPUCount = cpuCount;
     SetCallbackHandler (mHandler);
-    checkPointer (currentResultHolder   = new _THyPhyString);
-    askFID                              = -1;
+    checkPointer (currentResultHolder = new _THyPhyString);
+    askFID = -1;
     if (baseDirPath)
         // set base directory
     {
-        baseDirectoryInstance = new _THyPhyString (baseDirPath);
-        baseDirectory       = baseDirectoryInstance->sData;
+        baseDirectory = baseDirPath;
+        if (baseDirectory.getChar(baseDirectory.sLength-1) != dirSlash) {
+            baseDirectory = baseDirectory & dirSlash;
+        }
+        baseDirectoryInstance = new _THyPhyString (baseDirectory.sData);
+        baseDirectory = baseDirectoryInstance->sData;
+        pathNames && &baseDirectory;
         ReadPreferences ();
     }
+
+#ifdef _HYPHY_LIBDIRECTORY_    
+    libDirectory = _HYPHY_LIBDIRECTORY_;
+    if (libDirectory.getChar(libDirectory.sLength-1) != dirSlash) {
+        libDirectory = libDirectory & dirSlash;
+    }
+#else
+    if (baseDirectory)
+        libDirectory = baseDirectory;
+#endif
+
+    pathNames && &libDirectory;
     GlobalStartup();
     errors   = nil;
     warnings = nil;
@@ -232,6 +266,24 @@ _THyPhyString * _THyPhy::ExecuteBF (const char * buffer, bool doPurge)
     if (doPurge) {
         PurgeAll            (true);    // cleanup results of previous analysis
     }
+
+    _String             dd (GetPlatformDirectoryChar());
+
+    _FString            bp  (baseDirectory, false),
+                        lp  (libDirectory, false),
+                        ds  (dd),
+                        cfp (pathNames.lLength?*(_String*)pathNames(pathNames.lLength-1):empty),
+                        * stashed = (_FString*)FetchObjectFromVariableByType (&pathToCurrentBF, STRING);
+
+    setParameter        (platformDirectorySeparator, &ds);
+    setParameter        (hyphyBaseDirectory, &bp);
+    setParameter        (hyphyLibDirectory, &lp);
+
+    if (stashed) {
+        stashed = (_FString*)stashed->makeDynamic();
+    }
+    setParameter        (pathToCurrentBF,&cfp);
+
     _String             commandString (buffer);
 
     if (commandString.beginswith ("#NEXUS"),false) {
@@ -241,8 +293,6 @@ _THyPhyString * _THyPhy::ExecuteBF (const char * buffer, bool doPurge)
 
     _ExecutionList      compiledCode  (commandString);
 
-    baseDirectory       = baseDirectoryInstance->sData;
-    pathNames           && & baseDirectory;
     ApplyPreferences    ();
 
     DeleteObject        ((_String*)errors);
@@ -368,7 +418,6 @@ _THyPhyString   * _THyPhy::ConvertHyPhyString (void * o)
 bool _THyPhy::CanCast (const void* theObject, const int requestedType)
 {
     if (theObject) {
-        _PMathObj mo = (_PMathObj) theObject;
         switch (((_PMathObj)theObject)->ObjectClass()) {
         case NUMBER:
             return true;
