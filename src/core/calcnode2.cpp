@@ -7,10 +7,10 @@ Core Developers:
   Sergei L Kosakovsky Pond (spond@ucsd.edu)
   Art FY Poon    (apoon@cfenet.ubc.ca)
   Steven Weaver (sweaver@ucsd.edu)
-  
+
 Module Developers:
-	Lance Hepler (nlhepler@gmail.com)
-	Martin Smith (martin.audacis@gmail.com)
+    Lance Hepler (nlhepler@gmail.com)
+    Martin Smith (martin.audacis@gmail.com)
 
 Significant contributions from:
   Spencer V Muse (muse@stat.ncsu.edu)
@@ -50,6 +50,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 extern  long likeFuncEvalCallCount,
         matrixExpCount;
 
+/*
 #ifdef MDSOCL
 int launchmdsocl(long siteCount,
                  long nodeCount,
@@ -65,6 +66,7 @@ int launchmdsocl(long siteCount,
                  _SimpleList taggedInternals,
                  _GrowingVector* lNodeResolutions);
 #endif
+                 */
 
 #ifdef  _SLKP_LFENGINE_REWRITE_
 
@@ -237,27 +239,28 @@ void        _TheTree::FillInConditionals        (_DataSetFilter*        theFilte
 /*----------------------------------------------------------------------------------------------------------*/
 
 #ifdef MDSOCL
-_Parameter _TheTree::OCLLikelihoodEvaluator (			_SimpleList&		     updateNodes, 
-														_DataSetFilter*		 theFilter,
-                                                        _Parameter*			 iNodeCache,
-                                                        long	   *			 lNodeFlags,
-                                                        _GrowingVector*		 lNodeResolutions,
-														_OCLEvaluator& OCLEval)
+_Parameter _TheTree::OCLLikelihoodEvaluator(_SimpleList& updateNodes,
+                                            _DataSetFilter* theFilter,
+                                            _Parameter* iNodeCache,
+                                            long* lNodeFlags,
+                                            _GrowingVector* lNodeResolutions,
+                                            OCLlikeEval& OCLEval)
+                                            //_OCLEvaluator& OCLEval)
 {
 
-	_SimpleList		taggedInternals					(flatNodes.lLength, 0, 0);
-	//printf("Launching a tree in OpenCL...\n");
-	return ((_Parameter) OCLEval.launchmdsocl(			updateNodes,
-														flatParents,
-														flatNodes,
-														flatCLeaves,
-														flatLeaves,
-														flatTree,
-														theProbs,
-														theFilter->theFrequencies,
-														lNodeFlags,
-														taggedInternals,
-														lNodeResolutions));
+    _SimpleList taggedInternals (flatNodes.lLength, 0, 0);
+    //printf("Launching a tree in OpenCL...\n");
+    return ((_Parameter) OCLEval.eval_likelihood(   updateNodes,
+                                                    flatParents,
+                                                    flatNodes,
+                                                    flatCLeaves,
+                                                    flatLeaves,
+                                                    flatTree,
+                                                    theProbs,
+                                                    theFilter->theFrequencies,
+                                                    lNodeFlags,
+                                                    taggedInternals,
+                                                    lNodeResolutions));
 }
 
 #endif

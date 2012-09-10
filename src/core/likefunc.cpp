@@ -75,7 +75,8 @@ void    DecideOnDivideBy (_LikelihoodFunction*);
 #endif
 
 #ifdef MDSOCL
-	_OCLEvaluator *OCLEval;
+	//_OCLEvaluator *OCLEval;
+	OCLlikeEval *OCLEval;
 #endif
 
 #ifdef __MP__
@@ -3655,7 +3656,8 @@ void            _LikelihoodFunction::SetupLFCaches              (void)
     matricesToExponentiate.Clear();
 
 #ifdef MDSOCL
-	OCLEval = new _OCLEvaluator[theTrees.lLength]();
+	//OCLEval = new _OCLEvaluator[theTrees.lLength]();
+	OCLEval = new OCLlikeEval[theTrees.lLength]();
 #endif
 
     evalsSinceLastSetup = 0;
@@ -7538,7 +7540,8 @@ void    _LikelihoodFunction::Cleanup (void)
 #ifdef MDSOCL
 	for (int i = 0; i < theTrees.lLength; i++)
 	{
-		OCLEval[i].~_OCLEvaluator();
+		//OCLEval[i].~_OCLEvaluator();
+		OCLEval[i].~OCLlikeEval();
 	}
 	delete [] OCLEval;
 #endif
@@ -7837,9 +7840,9 @@ _Parameter  _LikelihoodFunction::ComputeBlock (long index, _Parameter* siteRes, 
 
 #ifdef MDSOCL
 
-        return t->OCLLikelihoodEvaluator (changedBranches, 
-              df, 
-              conditionalInternalNodeLikelihoodCaches[index],     
+        return t->OCLLikelihoodEvaluator (changedBranches,
+              df,
+              conditionalInternalNodeLikelihoodCaches[index],
               conditionalTerminalNodeStateFlag[index],
               (_GrowingVector*)conditionalTerminalNodeLikelihoodCaches(index),
               OCLEval[index]);

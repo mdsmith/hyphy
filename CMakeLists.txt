@@ -238,14 +238,19 @@ add_custom_target(SP DEPENDS HYPHYSP)
 #-------------------------------------------------------------------------------
 # hyphy OpenCL target
 #-------------------------------------------------------------------------------
+file(GLOB OCLLIBSRC src/ocllib/gpuMuller.cpp
+                    src/ocllib/helperFunctions.cpp
+                    src/ocllib/matrix.cpp
+                    src/ocllib/muller.cpp
+                    src/ocllib/naiveFunctions.cpp)
 find_package(OpenCL)
 if(${OPENCL_FOUND})
     add_executable(
         HYPHYOCL
         EXCLUDE_FROM_ALL
-        ${SRC_COMMON} ${SRC_UNIXMAIN} ${CMAKE_CURRENT_BINARY_DIR}/src/ocl/opencl_kernels.h
+        ${SRC_COMMON} ${OCLLIBSRC} ${SRC_UNIXMAIN} ${CMAKE_CURRENT_BINARY_DIR}/src/ocl/opencl_kernels.h
     )
-    include_directories(${OPENCL_INCLUDE_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
+    include_directories( src/ocllib/ ${OPENCL_INCLUDE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/src/ocl/ ${CMAKE_CURRENT_SOURCE_DIR})
     target_link_libraries(HYPHYOCL ${DEFAULT_LIBRARIES} ${OPENCL_LIBRARIES})
     install(
         TARGETS HYPHYOCL
@@ -255,7 +260,7 @@ if(${OPENCL_FOUND})
     add_custom_target(OCL DEPENDS HYPHYOCL)
     set_property(
         TARGET HYPHYOCL
-        APPEND PROPERTY COMPILE_DEFINITIONS __MP__ __MP2__ __UNIX__ _HY_GPU_EXAMPLE_CALCULATOR MDSOCL
+        APPEND PROPERTY COMPILE_DEFINITIONS __MP__ __MP2__ __UNIX__ _HY_GPU_EXAMPLE_CALCULATOR MDSOCL OCL
     )
     if((NOT APPLE) AND (DEFINED ENV{AMDAPPSDKROOT}))
         set_property(

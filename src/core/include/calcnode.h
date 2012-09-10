@@ -9,8 +9,8 @@ Core Developers:
   Steven Weaver (sweaver@ucsd.edu)
   
 Module Developers:
-	Lance Hepler (nlhepler@gmail.com)
-	Martin Smith (martin.audacis@gmail.com)
+    Lance Hepler (nlhepler@gmail.com)
+    Martin Smith (martin.audacis@gmail.com)
 
 Significant contributions from:
   Spencer V Muse (muse@stat.ncsu.edu)
@@ -51,58 +51,61 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
 #ifdef MDSOCL
+#include "ocllikelib.h"
 
+/*
 class _OCLEvaluator 
 {
 
 private:
-	// OpenCL Vars
+    // OpenCL Vars
 
-	// Forward Declarations
-	// *********************************************************************
-	void Cleanup (int iExitCode);
-	unsigned int roundUpToNextPowerOfTwo(unsigned int x);
-	double roundDoubleUpToNextPowerOfTwo(double x);
-	// So the only thing that needs to be passed as an update for each LF is flatTree and flatCLeaves
-	// as those are what goes into the new transition matrix stuff. 
-	// So I could have a launchmdsocl that takes everything and if stuff is not NULL than update, if it is
-	// null use the existing values. How about that?
-	// The problem is that I need to have essentially the first LF's information to properly set everything up. 
-	// And how do I have subsequent LF's not pass stuff. 
-	// Oi, how do I not have to convert this into an object...
-	// alright, I can probably keep all of this in likefunc. That is because the LFEvaluation is done in the
-	// calc node
-	double oclmain(void);
-	bool contextSet;
-	int setupContext(void);
+    // Forward Declarations
+    // *********************************************************************
+    void Cleanup (int iExitCode);
+    unsigned int roundUpToNextPowerOfTwo(unsigned int x);
+    double roundDoubleUpToNextPowerOfTwo(double x);
+    // So the only thing that needs to be passed as an update for each LF is flatTree and flatCLeaves
+    // as those are what goes into the new transition matrix stuff. 
+    // So I could have a launchmdsocl that takes everything and if stuff is not NULL than update, if it is
+    // null use the existing values. How about that?
+    // The problem is that I need to have essentially the first LF's information to properly set everything up. 
+    // And how do I have subsequent LF's not pass stuff. 
+    // Oi, how do I not have to convert this into an object...
+    // alright, I can probably keep all of this in likefunc. That is because the LFEvaluation is done in the
+    // calc node
+    double oclmain(void);
+    bool contextSet;
+    int setupContext(void);
     int nextMulSixteen(int x);
     int nextMul(int x, int y);
 
 
 public:
-	void init(		long esiteCount,
-						long ealphabetDimension,
-						_Parameter* eiNodeCache);
+    void init(      long esiteCount,
+                        long ealphabetDimension,
+                        _Parameter* eiNodeCache);
 
 
-	double launchmdsocl(	_SimpleList& updateNodes,
-							_SimpleList& flatParents,
-							_SimpleList& flatNodes,
-							_SimpleList& flatCLeaves,
-							_SimpleList& flatLeaves,
-							_SimpleList& flatTree,
-							_Parameter* theProbs,
-							_SimpleList& theFrequencies,
-							long* lNodeFlags,
-							_SimpleList& taggedInternals,
-							_GrowingVector* lNodeResolutions);
-	~_OCLEvaluator()
-	{
-		Cleanup(EXIT_SUCCESS);
-	}
+    double launchmdsocl(    _SimpleList& updateNodes,
+                            _SimpleList& flatParents,
+                            _SimpleList& flatNodes,
+                            _SimpleList& flatCLeaves,
+                            _SimpleList& flatLeaves,
+                            _SimpleList& flatTree,
+                            _Parameter* theProbs,
+                            _SimpleList& theFrequencies,
+                            long* lNodeFlags,
+                            _SimpleList& taggedInternals,
+                            _GrowingVector* lNodeResolutions);
+    ~_OCLEvaluator()
+    {
+        Cleanup(EXIT_SUCCESS);
+    }
 
 
 };
+*/
 #endif
 
 
@@ -732,12 +735,13 @@ public:
             _GrowingVector*      lNodeResolutions);
 
 #ifdef MDSOCL
-			_Parameter OCLLikelihoodEvaluator (			_SimpleList&	     updateNodes, 
-                                                        _DataSetFilter*		 theFilter,
-                                                        _Parameter*			 iNodeCache,
-                                                         long	   *		 lNodeFlags,
-                                                        _GrowingVector*		 lNodeResolutions,
-														_OCLEvaluator& OCLEval);
+            _Parameter OCLLikelihoodEvaluator(  _SimpleList& updateNodes,
+                                                _DataSetFilter* theFilter,
+                                                _Parameter* iNodeCache,
+                                                long* lNodeFlags,
+                                                _GrowingVector* lNodeResolutions,
+                                                OCLlikeEval& OCLEval);
+                                                //_OCLEvaluator& OCLEval);
 #endif
 
 #ifdef  _SLKP_LFENGINE_REWRITE_

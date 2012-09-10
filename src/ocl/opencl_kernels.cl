@@ -188,12 +188,12 @@ __kernel void ResultKernel (   __global int* freq_cache,                   // ar
                                __global float* prob_cache,                 // argument 1
                                __global fpoint* result_cache,              // argument 2
                                __global float* node_cache,                 // argument 3
-                               __global int* scalings,                // argument 4
+                               __global int* scalings,                     // argument 4
                                long sites,                                 // argument 5
                                long roundCharacters,                       // argument 6
                                float scalar,                               // argument 7
-                               long characters,                             // argument 8
-                                int rootNodeIndex
+                               long characters,                            // argument 8
+                               int rootNodeIndex
                            )
 {
    // shrink the work group to sites, rather than sites x characters
