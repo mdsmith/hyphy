@@ -40,6 +40,8 @@ __kernel void matMul(
 
     int gx = get_global_id(0);
     int gy = get_global_id(1);
+    //C[(get_global_size(0) * get_global_size(1)) - (wB*gy + gx)] = wB*gy +
+    //gx; // XXX for testing purposes only
 
     bool in_frame = false;
     if (gx < row_bound && gy < col_bound)

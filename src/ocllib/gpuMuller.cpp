@@ -324,8 +324,8 @@ void GPUMuller::update_buffers()
 */
 
     // work dim setup
-    global_work_size[0] = round_up(A.get_bound_rows(),PAD_SIZE);
-    global_work_size[1] = round_up(B.get_bound_cols(),PAD_SIZE);
+    global_work_size[0] = round_up(B.get_bound_cols(),PAD_SIZE);
+    global_work_size[1] = round_up(A.get_bound_rows(),PAD_SIZE);
     local_work_size[0] = BLOCK_SIZE;
     local_work_size[1] = BLOCK_SIZE;
 
@@ -538,6 +538,7 @@ void GPUMuller::multiply()
     cl_int temp_c_col_offset = C.get_col_offset();
     cl_bool temp_overwrite = overwrite;
 
+/*
     cout    << "AH, AW, ARO, ACO: "
             << temp_ah << ", "
             << temp_ud << ", "
@@ -560,7 +561,11 @@ void GPUMuller::multiply()
             << temp_bw << ", "
             << " col bound: "
             << temp_ah
+            << endl
+            << "overwrite: "
+            << overwrite
             << endl;
+*/
 
 
     // set kernel args
@@ -615,10 +620,10 @@ void GPUMuller::multiply()
     double elapsedTime;
     gettimeofday(&t1, NULL);
 
-    cout << "Global work size: " << global_work_size[0];
-    cout << ", " << global_work_size[1] << endl;
-    cout << "Local work size: " << local_work_size[0];
-    cout << ", " << local_work_size[1] << endl;
+    //cout << "Global work size: " << global_work_size[0];
+    //cout << ", " << global_work_size[1] << endl;
+    //cout << "Local work size: " << local_work_size[0];
+    //cout << ", " << local_work_size[1] << endl;
     err_num = clEnqueueNDRangeKernel(   queue,
                                         kernel,
                                         2,
@@ -725,38 +730,23 @@ void GPUMuller::eval_C(int row_offset, int col_offset, int height, int width)
     else
         check_buffers();
 
-    // XXX HERE so the problem is that C is only filling 64x61. I'm not sure
-    // why. It doesn't appear to be bounding in the kernel, but it doesn't
-    // appear to be the number of threads created. Investigate tx/gx/bx
-    // first...
-    // Investigate, nothing wrong. Also investigated the sizes. Likewise
-    // nothing wrong. Also tested "fresh of the GPU," the problem is there as
-    // well. Not sure what to look into next. There is no evidence the
-    // algorithm isn't working. In theory we could replace teh entire kernel
-    // with one that just sets stuff given the gx and gy. This would be
-    // enough (and is essentially what we're doing. Whats wierd is that up to
-    // that point everything is going swimmingly. It is not like some offset
-    // is off. Unless something in the kernel says "for this thread mark
-    // gyxgx + offset into the future unless gyxgx is past this point. Hmmm.
-    // XXX C is filling, but only ~50% something isn't right. That being said
-    // the kernel was "working" in the regular library when the action part
-    // of it was commented out, so something is clearly up...
-    //cout << "After rebounding: " << endl;
-    print_A(); // XXX temp
+    // XXX Got C working fine. Now B is good, but after a while nodes have
+    // all zero t-matrices.
+    //print_A(); // XXX temp
     // XXX Looks great, and appears to be properly updated (on the host. On the
-    // GPU? Check)...
-    print_B(); // XXX temp
+    // GPU? Check...)
+    //print_B(); // XXX temp
 
     // XXX in a clear cut perfect A * B = C, C isn't filling with anything.
     multiply();
+    /*
     read_C( 0,
             C.get_data()->get_total_rows() * C.get_data()->get_total_cols(),
             C.get_data()->get_scaled_float(),
             C.get_data()->get_scalings()); // XXX temp
-    /*
     */
     evaluated = true;
-    print_C(); // XXX temp
+    //print_C(); // XXX temp
     //cout << "C after multiply: " << endl;
     //print_C(0, 0, C.get_total_rows(), C.get_total_cols());
 }
@@ -794,7 +784,7 @@ float* GPUMuller::get_C(int row_offset, int col_offset, int height, int width)
     //cout << "RO: " << row_offset << " CO: " << col_offset << " h: " << height
     //<< " w: " << width << endl;
 
-    return C.get_data()->get_slice(row_offset, col_offset, width, height);
+    return C.get_data()->get_slice(row_offset, col_offset, height, width);
 }
 
 double* GPUMuller::get_C_double(int row_offset, int col_offset, int height, int width)
@@ -814,12 +804,11 @@ double* GPUMuller::get_C_double(int row_offset, int col_offset, int height, int 
             C.get_data()->get_scalings());
 
 
-    // XXX something is broken here if they're printing different things.
+    //C.get_data()->print_mat(row_offset, col_offset, height, width);
     /*
-    C.print_total();
     cout << endl << endl << endl;
-    cout << "root conditionals: " << endl;
-    double* test = C.get_slice_double(row_offset, col_offset, width, height);
+    cout << "Root conditionals earlier: " << endl;
+    double* test = C.get_data()->get_slice_double(row_offset, col_offset, width, height);
     for (int i = 0; i < width*height; i++)
     {
         cout << test[i] << " ";
@@ -831,7 +820,8 @@ double* GPUMuller::get_C_double(int row_offset, int col_offset, int height, int 
     //cout << "RO: " << row_offset << " CO: " << col_offset << " h: " << height
     //<< " w: " << width << endl;
 
-    return C.get_data()->get_slice_double(row_offset, col_offset, width, height);
+    return C.get_data()->get_slice_double(row_offset, col_offset, height,
+    width);
 }
 
 

@@ -74,12 +74,19 @@ void OCLlikeEval::init( long siteCount,
 void OCLlikeEval::setupContext()
 {
     // XXX make this compatible with ambiguous nodes
-    long treesize = alphabetDimension * siteCount * (flatNodes.lLength +
-    flatLeaves.lLength);
+    long treesize = alphabetDimension
+                    * siteCount
+                    * ( flatNodes.lLength
+                        + flatLeaves.lLength);
+/*
     treeCache = new double[ alphabetDimension
                             * siteCount
-                            * (flatNodes.lLength
-                            + flatLeaves.lLength)];
+                            * ( flatNodes.lLength
+                                + flatLeaves.lLength
+                              )
+                          ];
+*/
+    treeCache = new double[treesize];
 
     int leafThresh = alphabetDimension * siteCount * flatLeaves.lLength;
     for (int n = 0; n < flatLeaves.lLength; n++)
@@ -149,12 +156,14 @@ void OCLlikeEval::setupContext()
 
 double OCLlikeEval::evaluate()
 {
-    for (int n = 0; n < updateNodes.lLength; n++)
+    for (int n =0; n < updateNodes.lLength; n++)
     {
         int nodeCode = updateNodes.lData[n];
+        int uniqueNodeCode = nodeCode;
         int parentCode = flatParents.lData[n];
         bool isLeaf = nodeCode < flatLeaves.lLength;
         if (!isLeaf) nodeCode -= flatLeaves.lLength;
+        //cout << "Updating nodeCode " << uniqueNodeCode << "'s model..." << endl;
 
         _Parameter* tMatrix = (isLeaf? ((_CalcNode*) flatCLeaves (nodeCode)):
                     ((_CalcNode*) flatTree
@@ -164,12 +173,13 @@ double OCLlikeEval::evaluate()
         {
             for (int cc = 0; cc < alphabetDimension; cc++)
             {
-                modelCache[nodeCode * alphabetDimension * alphabetDimension + pc *
+                modelCache[uniqueNodeCode * alphabetDimension * alphabetDimension + pc *
                 alphabetDimension + cc] = (double)(tMatrix[pc *
                 alphabetDimension + cc]);
             }
         }
     }
+    //cout << flatParents.lLength-1 << " total models" << endl;
     int BNR = (flatParents.lLength - 1) * alphabetDimension;
     int BNC = alphabetDimension;
     gm.update_B(modelCache, 0, 0, BNR, BNC, BNR, BNC);
@@ -181,8 +191,8 @@ double OCLlikeEval::evaluate()
         long nodeCode = updateNodes.lData[n];
         long parentCode = flatParents.lData[nodeCode];
 
-        cout << "nodeCode: " << nodeCode << endl;
-        cout << "parentCode: " << parentCode << endl;
+        //cout << "nodeCode: " << nodeCode << endl;
+        //cout << "parentCode: " << parentCode << endl;
 
         // At this point you would normally subtract the number of leaves
         // from nodeCode, but as we are recreating the whole tree it is fine
@@ -194,7 +204,6 @@ double OCLlikeEval::evaluate()
 
 
 /*
-*/
         cout    << "ARO, ACO, AH, UD: "
                 << ARO
                 << ", "
@@ -204,6 +213,7 @@ double OCLlikeEval::evaluate()
                 << ", "
                 << UD
                 << endl;
+*/
         gm.bound_A(ARO, ACO, AH, UD);
 
         BRO = nodeCode * alphabetDimension;
@@ -211,7 +221,6 @@ double OCLlikeEval::evaluate()
         BW = alphabetDimension;
 
 /*
-*/
         cout    << "BRO, BCO, UD, BW: "
                 << BRO
                 << ", "
@@ -221,6 +230,7 @@ double OCLlikeEval::evaluate()
                 << ", "
                 << BW
                 << endl;
+*/
         gm.bound_B(BRO, BCO, UD, BW);
 
         // However just as we would normally subtract the number of leaves
@@ -230,12 +240,12 @@ double OCLlikeEval::evaluate()
         CCO = 0;
 
 /*
-*/
         cout    << "CRO, CCO: "
                 << CRO
                 << ", "
                 << CCO
                 << endl;
+*/
 
         if (taggedInternals.lData[parentCode] == 0)
         {
@@ -257,6 +267,7 @@ double OCLlikeEval::evaluate()
     int rootW = alphabetDimension;
     // XXX check to make sure there is an option for slicing without mangling
     // memory
+/*
     cout    << "rootRO, rootCO: "
             << rootRO
             << ", "
@@ -267,6 +278,7 @@ double OCLlikeEval::evaluate()
             << ", "
             << rootW
             << endl;
+*/
     double* result = gm.get_C_double(rootRO, rootCO, rootH, rootW);
 
     return process_results(result);
@@ -274,7 +286,7 @@ double OCLlikeEval::evaluate()
 
 double OCLlikeEval::process_results(double* root_conditionals)
 {
-    cout << "Root Conditionals: " << endl;
+    //cout << "Root Conditionals: " << endl;
     double result = 0.0;
     long root_index = 0;
     for (long s = 0; s < siteCount; s++)
@@ -282,11 +294,11 @@ double OCLlikeEval::process_results(double* root_conditionals)
         double accumulator = 0.0;
         for (long pc = 0; pc < alphabetDimension; pc++)
         {
-            cout << root_conditionals[root_index] << " ";
+            //cout << root_conditionals[root_index] << " ";
             accumulator += root_conditionals[root_index] * theProbs[pc];
             root_index++;
         }
-        cout << endl;
+        //cout << endl;
         result += log(accumulator) * theFrequencies[s];
     }
     return result;
