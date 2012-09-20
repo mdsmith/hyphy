@@ -241,6 +241,7 @@ add_custom_target(SP DEPENDS HYPHYSP)
 file(GLOB OCLLIBSRC src/ocllib/gpuMuller.cpp
                     src/ocllib/helperFunctions.cpp
                     src/ocllib/matrix.cpp
+                    src/ocllib/matrixData.cpp
                     src/ocllib/muller.cpp
                     src/ocllib/naiveFunctions.cpp)
 find_package(OpenCL)

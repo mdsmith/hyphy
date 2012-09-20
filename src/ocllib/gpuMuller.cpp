@@ -67,6 +67,8 @@ void GPUMuller::set_A(float* A, int num_rows, int num_cols)
 
 void GPUMuller::set_A(double* A, int num_rows, int num_cols)
 {
+    //cout << "printing treecache: " << endl;
+    //print_double_mat(A, 0,0, num_rows, num_cols, num_rows, num_cols);
     if (ctx != NULL)
         cleanBuff = false;
     Muller::set_A(A, num_rows, num_cols);
@@ -238,7 +240,6 @@ void GPUMuller::setup_context()
 
 void GPUMuller::update_buffers()
 {
-    // XXX This is most likely all incorrect...
     // array rounding
     //if (    A.get_data()->get_scaled_float() == B.get_data()->get_scaled_float()
         //&&  A.get_data()->get_scaled_float() == C.get_data()->get_scaled_float())
@@ -537,6 +538,31 @@ void GPUMuller::multiply()
     cl_int temp_c_col_offset = C.get_col_offset();
     cl_bool temp_overwrite = overwrite;
 
+    cout    << "AH, AW, ARO, ACO: "
+            << temp_ah << ", "
+            << temp_ud << ", "
+            << temp_a_row_offset << ", "
+            << temp_a_col_offset << ", "
+            << endl
+            << "BH, BW, BRO, BCO: "
+            << temp_ud << ", "
+            << temp_bw << ", "
+            << temp_b_row_offset << ", "
+            << temp_b_col_offset << ", "
+            << endl
+            << "CH, CW, CRO, CCO: "
+            << temp_ah << ", "
+            << temp_bw << ", "
+            << temp_c_row_offset << ", "
+            << temp_c_col_offset << ", "
+            << endl
+            << "row bound: "
+            << temp_bw << ", "
+            << " col bound: "
+            << temp_ah
+            << endl;
+
+
     // set kernel args
     err_num  = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *) &d_A);
     err_num |= clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *) &d_As);
@@ -589,10 +615,10 @@ void GPUMuller::multiply()
     double elapsedTime;
     gettimeofday(&t1, NULL);
 
-    //cout << "Global work size: " << global_work_size[0];
-    //cout << ", " << global_work_size[1] << endl;
-    //cout << "Local work size: " << local_work_size[0];
-    //cout << ", " << local_work_size[1] << endl;
+    cout << "Global work size: " << global_work_size[0];
+    cout << ", " << global_work_size[1] << endl;
+    cout << "Local work size: " << local_work_size[0];
+    cout << ", " << local_work_size[1] << endl;
     err_num = clEnqueueNDRangeKernel(   queue,
                                         kernel,
                                         2,
@@ -642,6 +668,8 @@ void GPUMuller::read_C( int offset, // This is the offset for both the GPU
                                     NULL);
 
 /*
+    cout    << "Offset: " << offset
+            << ", size: " << size;
     cout << "C fresh off the gpu: " << endl;
     cout << "size " << size << endl;
     for (int i = 0; i < size; i++)
@@ -697,12 +725,38 @@ void GPUMuller::eval_C(int row_offset, int col_offset, int height, int width)
     else
         check_buffers();
 
+    // XXX HERE so the problem is that C is only filling 64x61. I'm not sure
+    // why. It doesn't appear to be bounding in the kernel, but it doesn't
+    // appear to be the number of threads created. Investigate tx/gx/bx
+    // first...
+    // Investigate, nothing wrong. Also investigated the sizes. Likewise
+    // nothing wrong. Also tested "fresh of the GPU," the problem is there as
+    // well. Not sure what to look into next. There is no evidence the
+    // algorithm isn't working. In theory we could replace teh entire kernel
+    // with one that just sets stuff given the gx and gy. This would be
+    // enough (and is essentially what we're doing. Whats wierd is that up to
+    // that point everything is going swimmingly. It is not like some offset
+    // is off. Unless something in the kernel says "for this thread mark
+    // gyxgx + offset into the future unless gyxgx is past this point. Hmmm.
+    // XXX C is filling, but only ~50% something isn't right. That being said
+    // the kernel was "working" in the regular library when the action part
+    // of it was commented out, so something is clearly up...
     //cout << "After rebounding: " << endl;
-    //print_A();
-    //print_B();
+    print_A(); // XXX temp
+    // XXX Looks great, and appears to be properly updated (on the host. On the
+    // GPU? Check)...
+    print_B(); // XXX temp
 
+    // XXX in a clear cut perfect A * B = C, C isn't filling with anything.
     multiply();
+    read_C( 0,
+            C.get_data()->get_total_rows() * C.get_data()->get_total_cols(),
+            C.get_data()->get_scaled_float(),
+            C.get_data()->get_scalings()); // XXX temp
+    /*
+    */
     evaluated = true;
+    print_C(); // XXX temp
     //cout << "C after multiply: " << endl;
     //print_C(0, 0, C.get_total_rows(), C.get_total_cols());
 }
@@ -745,6 +799,9 @@ float* GPUMuller::get_C(int row_offset, int col_offset, int height, int width)
 
 double* GPUMuller::get_C_double(int row_offset, int col_offset, int height, int width)
 {
+    //cout << "A id is: " << A.get_data()->get_id() << endl;
+    //cout << "B id is: " << B.get_data()->get_id() << endl;
+    //cout << "C id is: " << C.get_data()->get_id() << endl;
     // XXX um, how about we use the actual offsets?
     if (!evaluated)
     {

@@ -101,6 +101,7 @@ void OCLlikeEval::setupContext()
         bool isLeaf = nodeCode < flatLeaves.lLength;
         if (isLeaf)
         {
+            //cout << "NodeCode: " << nodeCode << endl;
             for (long s = 0; s < siteCount; s++)
             {
                 long siteState = lNodeFlags[nodeCode*siteCount + s];
@@ -110,8 +111,18 @@ void OCLlikeEval::setupContext()
                                 * siteCount
                                 * alphabetDimension
                                 + s
-                                * siteCount
+                                * alphabetDimension
                                 + siteState] = 1.0;
+                                /*
+                    cout    << "filling: "
+                            <<  nodeCode
+                                * siteCount
+                                * alphabetDimension
+                                + s
+                                * alphabetDimension
+                                + siteState
+                            << endl;
+                            */
                 }
                 else
                     cout << "no resolution?" << endl;
@@ -170,8 +181,8 @@ double OCLlikeEval::evaluate()
         long nodeCode = updateNodes.lData[n];
         long parentCode = flatParents.lData[nodeCode];
 
-        cout << "nodeCode" << nodeCode << endl;
-        cout << "parentCode" << parentCode << endl;
+        cout << "nodeCode: " << nodeCode << endl;
+        cout << "parentCode: " << parentCode << endl;
 
         // At this point you would normally subtract the number of leaves
         // from nodeCode, but as we are recreating the whole tree it is fine
@@ -182,6 +193,8 @@ double OCLlikeEval::evaluate()
         UD = alphabetDimension;
 
 
+/*
+*/
         cout    << "ARO, ACO, AH, UD: "
                 << ARO
                 << ", "
@@ -197,6 +210,8 @@ double OCLlikeEval::evaluate()
         BCO = 0;
         BW = alphabetDimension;
 
+/*
+*/
         cout    << "BRO, BCO, UD, BW: "
                 << BRO
                 << ", "
@@ -214,6 +229,8 @@ double OCLlikeEval::evaluate()
         CRO = (parentCode + flatLeaves.lLength) * siteCount;
         CCO = 0;
 
+/*
+*/
         cout    << "CRO, CCO: "
                 << CRO
                 << ", "
@@ -224,22 +241,32 @@ double OCLlikeEval::evaluate()
         {
             taggedInternals.lData[parentCode] = 1;
             gm.set_overwrite(true);
-            cout << "overwrite!" << endl;
+            //cout << "overwrite!" << endl;
         }
         else
         {
             gm.set_overwrite(false);
-            cout << "don't overwrite!" << endl;
+            //cout << "don't overwrite!" << endl;
         }
 
         gm.eval_C(CRO, CCO, AH, BW);
     }
-    int rootRO = (flatNodes.lLength - 1) * siteCount;
+    int rootRO = (flatLeaves.lLength + flatNodes.lLength - 1) * siteCount;
     int rootCO = 0;
     int rootH = siteCount;
     int rootW = alphabetDimension;
     // XXX check to make sure there is an option for slicing without mangling
     // memory
+    cout    << "rootRO, rootCO: "
+            << rootRO
+            << ", "
+            << rootCO
+            << ", "
+            << "rootH, rootW: "
+            << rootH
+            << ", "
+            << rootW
+            << endl;
     double* result = gm.get_C_double(rootRO, rootCO, rootH, rootW);
 
     return process_results(result);
@@ -247,7 +274,7 @@ double OCLlikeEval::evaluate()
 
 double OCLlikeEval::process_results(double* root_conditionals)
 {
-    //cout << "Root Conditionals: " << endl;
+    cout << "Root Conditionals: " << endl;
     double result = 0.0;
     long root_index = 0;
     for (long s = 0; s < siteCount; s++)
@@ -255,11 +282,11 @@ double OCLlikeEval::process_results(double* root_conditionals)
         double accumulator = 0.0;
         for (long pc = 0; pc < alphabetDimension; pc++)
         {
-            //cout << root_conditionals[root_index] << " ";
+            cout << root_conditionals[root_index] << " ";
             accumulator += root_conditionals[root_index] * theProbs[pc];
             root_index++;
         }
-        //cout << endl;
+        cout << endl;
         result += log(accumulator) * theFrequencies[s];
     }
     return result;
