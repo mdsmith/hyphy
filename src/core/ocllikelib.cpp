@@ -156,6 +156,12 @@ void OCLlikeEval::setupContext()
 
 double OCLlikeEval::evaluate()
 {
+    // XXX HERE so the issue is that these huge numbers are coming up later
+    // on when they really shouldn't be. Interesting these usually occur when
+    // what appears to be an incorrect transition matrix is used! Is there a
+    // chance that these matrices aren't being updated to the right location,
+    // aren't being pulled from the right location, or that kernels
+    // concerning the proper nodes aren't being launched?
     for (int n =0; n < updateNodes.lLength; n++)
     {
         int nodeCode = updateNodes.lData[n];
@@ -163,7 +169,7 @@ double OCLlikeEval::evaluate()
         int parentCode = flatParents.lData[n];
         bool isLeaf = nodeCode < flatLeaves.lLength;
         if (!isLeaf) nodeCode -= flatLeaves.lLength;
-        //cout << "Updating nodeCode " << uniqueNodeCode << "'s model..." << endl;
+        cout << "Updating nodeCode " << uniqueNodeCode << "'s model..." << endl;
 
         _Parameter* tMatrix = (isLeaf? ((_CalcNode*) flatCLeaves (nodeCode)):
                     ((_CalcNode*) flatTree
@@ -173,9 +179,17 @@ double OCLlikeEval::evaluate()
         {
             for (int cc = 0; cc < alphabetDimension; cc++)
             {
+                if (uniqueNodeCode == 9)
+                {
+                    cout << (double)(tMatrix[pc * alphabetDimension + cc]);
+                }
                 modelCache[uniqueNodeCode * alphabetDimension * alphabetDimension + pc *
                 alphabetDimension + cc] = (double)(tMatrix[pc *
                 alphabetDimension + cc]);
+            }
+            if (uniqueNodeCode == 9)
+            {
+                cout << endl;
             }
         }
     }
@@ -191,8 +205,10 @@ double OCLlikeEval::evaluate()
         long nodeCode = updateNodes.lData[n];
         long parentCode = flatParents.lData[nodeCode];
 
-        //cout << "nodeCode: " << nodeCode << endl;
-        //cout << "parentCode: " << parentCode << endl;
+        cout << "flatLeaves.lLength: " << flatLeaves.lLength;
+        cout << "nodeID: " << n << endl;
+        cout << "nodeCode: " << nodeCode << endl;
+        cout << "parentCode: " << parentCode << endl;
 
         // At this point you would normally subtract the number of leaves
         // from nodeCode, but as we are recreating the whole tree it is fine

@@ -730,23 +730,18 @@ void GPUMuller::eval_C(int row_offset, int col_offset, int height, int width)
     else
         check_buffers();
 
-    // XXX Got C working fine. Now B is good, but after a while nodes have
-    // all zero t-matrices.
-    //print_A(); // XXX temp
-    // XXX Looks great, and appears to be properly updated (on the host. On the
-    // GPU? Check...)
-    //print_B(); // XXX temp
+    print_A(); // XXX temp
+    print_B(); // XXX temp
 
-    // XXX in a clear cut perfect A * B = C, C isn't filling with anything.
     multiply();
-    /*
     read_C( 0,
             C.get_data()->get_total_rows() * C.get_data()->get_total_cols(),
             C.get_data()->get_scaled_float(),
             C.get_data()->get_scalings()); // XXX temp
+    /*
     */
     evaluated = true;
-    //print_C(); // XXX temp
+    print_C(); // XXX temp
     //cout << "C after multiply: " << endl;
     //print_C(0, 0, C.get_total_rows(), C.get_total_cols());
 }
@@ -805,7 +800,6 @@ double* GPUMuller::get_C_double(int row_offset, int col_offset, int height, int 
 
 
     //C.get_data()->print_mat(row_offset, col_offset, height, width);
-    /*
     cout << endl << endl << endl;
     cout << "Root conditionals earlier: " << endl;
     double* test = C.get_data()->get_slice_double(row_offset, col_offset, width, height);
@@ -815,6 +809,7 @@ double* GPUMuller::get_C_double(int row_offset, int col_offset, int height, int 
         if (i % width == 0)
             cout << endl;
     }
+    /*
     */
 
     //cout << "RO: " << row_offset << " CO: " << col_offset << " h: " << height
