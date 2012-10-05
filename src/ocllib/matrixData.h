@@ -48,6 +48,9 @@ public:
     // result in rounding
     float* get_unscaled_float();
 
+    void transpose();
+
+
     // returns an unpadded double array appropriately scaled in conjunction
     // with "scalings"
     // double* get_scaled_double(){return data_double;}; // not really needed
@@ -103,8 +106,11 @@ public:
                         int num_rows,
                         int num_cols
                         );
-    float* get_slice(int row_offset, int col_offset, int width, int height);
-    double* get_slice_double(int row_offset, int col_offset, int width, int height);
+    float* get_slice(int row_offset, int col_offset, int height, int width);
+    double* get_slice_double(   int row_offset,
+                                int col_offset,
+                                int height,
+                                int width);
     void pad_to(int interval);
 };
 

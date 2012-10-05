@@ -113,6 +113,10 @@ public:
                             int ud,
                             int bw);
     void print_A();
+    double* get_double_bound_A();
+    double* get_double_bound_B();
+    double* get_double_bound_C();
+    double* get_A();
     void print_A(   int row_offset,
                     int col_offset,
                     int num_rows,

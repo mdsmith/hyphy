@@ -15,6 +15,7 @@ private:
 public:
     GPUMuller();
     const char* get_name();
+    void transpose_B();
     void set_A(float* A, int num_rows, int num_cols);
     void set_A(double* A, int num_rows, int num_cols);
     void set_B(float* B, int num_rows, int num_cols);

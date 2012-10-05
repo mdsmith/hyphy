@@ -5,11 +5,21 @@
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 //#define WOLFRAM
 using namespace std;
 
 // definitions
+
+double non_zero_max(double a, double b)
+{
+    if (a == 0.0 && b != 0.0) return b;
+    else if (a != 0.0 && b == 0.0) return a;
+    else if (fabs(a) >= fabs(b)) return a;
+    else return b;
+}
+
 int round_up(int number, int base)
 {
     if (number == round_down(number, base))
@@ -91,7 +101,7 @@ void print_float_mat(float* m, int row_offset, int col_offset, int h, int w, int
         {
             if (c > col_offset && c < col_offset + w)
                 cout << ",";
-            printf("%4.4f", m[r*nc + c]);
+            printf("%g", m[r*nc + c]);
         }
         if (r < row_offset + h-1)
 #if defined WOLFRAM
@@ -116,7 +126,7 @@ void print_double_mat(double* m, int row_offset, int col_offset, int h, int w, i
         {
             if (c > col_offset && c < col_offset + w)
                 cout << ",";
-            printf("%4.4f", m[r*nc + c]);
+            printf("%g", m[r*nc + c]);
         }
         if (r < row_offset + h-1)
 #if defined WOLFRAM

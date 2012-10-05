@@ -22,15 +22,18 @@ public:
     Matrix();
     ~Matrix();
     MatrixData* get_data();
+    void transpose();
     int get_bound_cols() {return w;};
     int get_bound_rows() {return h;};
     int get_row_offset() {return row_offset;};
     int get_col_offset() {return col_offset;};
     void bound_data(int row_offset, int col_offset, int h, int w);
     void print_bound();
+    double* get_bound();
     bool is_set() {return set;};    // is there a MatrixData object?
     void set_set(bool setting) {set = setting;};    // is there a MatrixData
                                                     // object?
+    void set_data( MatrixData* md);
     //void update_scalings();
     //float* get_unscaled();
     //double* get_unscaled_double();
@@ -49,7 +52,6 @@ public:
     */
     //int get_total_cols() {return num_cols;};
     //int get_total_rows() {return num_rows;};
-    void set_data( MatrixData* md);
     /*
     void set_data(  float* data,
                     int row_offset,

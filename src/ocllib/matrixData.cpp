@@ -3,10 +3,9 @@
 #include <cstring>
 #include <math.h>
 #include <iostream>
+//#define WOLFRAM
 using namespace std;
 
-// XXX So the problem remains: how do you mediate updates to the data so that
-// the appropriate buffers are marked as dirty?
 
 MatrixData::MatrixData()
 {
@@ -36,6 +35,29 @@ MatrixData::~MatrixData()
 {
     delete[] data;
     delete[] scalings;
+}
+
+void MatrixData::transpose()
+{
+// XXX Not currently working
+/*
+    int new_num_rows = num_cols;
+    int new_num_cols = num_rows;
+    float* new_data = new float[new_num_rows][new_num_cols];
+    int* new_scalings = new int[new_num_rows][new_num_cols];
+    for (int r = 0; r < num_rows; r++)
+    {
+        for (int c = 0; c < num_cols; c++)
+        {
+            new_data[c*new_num_rows + r] = data[r*num_cols + c];
+            new_scalings[c*new_num_rows + r] = scalings[r*num_cols + c];
+        }
+    }
+    data = new_data;
+    scalings = new_scalings;
+    num_rows = new_num_rows;
+    num_cols = new_num_cols;
+*/
 }
 
 
@@ -86,30 +108,32 @@ void MatrixData::check_scalings()
         for (int i = 0; i < num_rows*num_cols; i++)
         {
             float value = data[i];
-            while (value < scal_thresh && value > 0)
+            /*
+            while (value < scal_thresh && value > 0.0f)
             {
                 //cout << "value: " << value << endl;
                 value *= scalar;
-                scalings[i]++;
+                scalings[i]--;
             }
-            while (value > -1*scal_thresh && value < 0)
+            while (value > -(1.0f)*scal_thresh && value < 0.0f)
             {
                 //cout << "value: " << value << endl;
                 value *= scalar;
+                scalings[i]--;
+            }
+            while (value > (1.0f)/scal_thresh)
+            {
+                //cout << "value: " << value << endl;
+                value /= scalar;
                 scalings[i]++;
             }
-            while (value > 1/scal_thresh)
+            while (value < (-1.0f)/scal_thresh)
             {
                 //cout << "value: " << value << endl;
                 value /= scalar;
-                scalings[i]--;
+                scalings[i]++;
             }
-            while (value < -1/scal_thresh)
-            {
-                //cout << "value: " << value << endl;
-                value /= scalar;
-                scalings[i]--;
-            }
+            */
             data[i] = value;
         }
     }
@@ -197,8 +221,10 @@ void MatrixData::print_mat(int row_offset, int col_offset, int num_rows, int num
             if (j > col_offset && j < col_offset + num_cols)
                 cout << ",";
 
-            printf( "%4.4f",
+            //printf( "%g x %g",
+            printf( "%g",
                     data[i*this->num_cols + j] *
+                    //data[i*this->num_cols + j] ,
                     pow(scalar, scalings[i*this->num_cols + j])
                     );
         }
@@ -215,6 +241,7 @@ void MatrixData::print_mat(int row_offset, int col_offset, int num_rows, int num
 }
 
 
+// XXX ummm, we need an "old" offset as well...
 void MatrixData::update_data(   float* new_data,    // new data to be subbed
                                                     // into data
                                 int sub_row_offset, // offset in data of
@@ -227,6 +254,23 @@ void MatrixData::update_data(   float* new_data,    // new data to be subbed
                                 int newd_num_cols   // size of new_data
                                 )
 {
+    for (int r = 0; r < sub_h; r++)
+    {
+        for (int c = 0; c < sub_w; c++)
+        {
+            if (r < num_rows && c < num_cols)
+            {
+                data[r * num_cols + c] = new_data[  sub_row_offset
+                                                    * newd_num_cols
+                                                    + sub_col_offset
+                                                    + r
+                                                    * newd_num_cols
+                                                    + c];
+                scalings[r * num_cols + c] = 0;
+            }
+        }
+    }
+    /*
     for (int r = sub_row_offset; r < sub_row_offset + sub_h; r++)
         for (int c = sub_col_offset; c < sub_col_offset + sub_w; c++)
             if (r < num_rows && c < num_cols)
@@ -234,6 +278,7 @@ void MatrixData::update_data(   float* new_data,    // new data to be subbed
                 data[r * num_cols + c] = new_data[r*newd_num_cols + c];
                 scalings[r * num_cols + c] = 0;
             }
+    */
     check_scalings();
 }
 
@@ -249,6 +294,23 @@ void MatrixData::update_data(   double* new_data,    // new data to be subbed
                                 int newd_num_cols   // size of new_data
                                 )
 {
+    for (int r = 0; r < sub_h; r++)
+    {
+        for (int c = 0; c < sub_w; c++)
+        {
+            if (r < num_rows && c < num_cols)
+            {
+                data[r * num_cols + c] = (float)new_data[   sub_row_offset
+                                                            * newd_num_cols
+                                                            + sub_col_offset
+                                                            + r
+                                                            * newd_num_cols
+                                                            + c];
+                scalings[r * num_cols + c] = 0;
+            }
+        }
+    }
+    /*
     for (int r = sub_row_offset; r < sub_row_offset + sub_h; r++)
         for (int c = sub_col_offset; c < sub_col_offset + sub_w; c++)
             if (r < num_rows && c < num_cols)
@@ -259,6 +321,7 @@ void MatrixData::update_data(   double* new_data,    // new data to be subbed
                                                             + c]);
                 scalings[r * num_cols + c] = 0;
             }
+    */
     check_scalings();
 }
 
@@ -326,6 +389,7 @@ double* MatrixData::get_slice_double(   int row_offset,
             }
         }
     }
+    //cout << "in slicer: "<< endl;
     //print_double_mat(tbr, 0,0,height,width,height,width);
     //print_float_mat(data,
     //row_offset,col_offset,height,width,num_rows,num_cols);

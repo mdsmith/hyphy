@@ -7,6 +7,7 @@
 #include <iostream>
 #include <stdio.h>
 #include "helperFunctions.h"
+#include "naiveFunctions.h"
 #include <sys/stat.h>
 #include <sys/time.h>
 #if defined(__APPLE__) || defined(APPLE)
@@ -57,6 +58,11 @@ const char* GPUMuller::get_name()
     return "GPU";
 }
 
+
+void GPUMuller::transpose_B()
+{
+    B.transpose();
+}
 
 void GPUMuller::set_A(float* A, int num_rows, int num_cols)
 {
@@ -395,8 +401,8 @@ void GPUMuller::update_buffers()
 
     if (d_C != NULL)
     {
-        err_num = clReleaseMemObject(d_C);
-        err_num |= clReleaseMemObject(d_Cs);
+        //err_num = clReleaseMemObject(d_C);
+        //err_num |= clReleaseMemObject(d_Cs);
         if (err_num != CL_SUCCESS)
         {
             cout << "release buffer fail" << endl;
@@ -452,7 +458,8 @@ void GPUMuller::check_buffers()
                                         d_A,
                                         CL_FALSE,
                                         0,
-                                        sizeof(cl_float)*A.get_data()->get_total_rows()*A.get_data()->get_total_cols(),
+                                        sizeof(cl_float)* A.get_data()->get_total_rows()
+                                                        * A.get_data()->get_total_cols(),
                                         A.get_data()->get_scaled_float(),
                                         0,
                                         NULL,
@@ -462,7 +469,8 @@ void GPUMuller::check_buffers()
                                         d_As,
                                         CL_FALSE,
                                         0,
-                                        sizeof(int)*A.get_data()->get_total_rows()*A.get_data()->get_total_cols(),
+                                        sizeof(cl_int)  * A.get_data()->get_total_rows()
+                                                        * A.get_data()->get_total_cols(),
                                         A.get_data()->get_scalings(),
                                         0,
                                         NULL,
@@ -475,7 +483,8 @@ void GPUMuller::check_buffers()
                                         d_B,
                                         CL_FALSE,
                                         0,
-                                        sizeof(cl_float)*B.get_data()->get_total_rows()*B.get_data()->get_total_cols(),
+                                        sizeof(cl_float)* B.get_data()->get_total_rows()
+                                                        * B.get_data()->get_total_cols(),
                                         B.get_data()->get_scaled_float(),
                                         0,
                                         NULL,
@@ -485,7 +494,8 @@ void GPUMuller::check_buffers()
                                         d_Bs,
                                         CL_FALSE,
                                         0,
-                                        sizeof(int)*B.get_data()->get_total_rows()*B.get_data()->get_total_cols(),
+                                        sizeof(cl_int)  * B.get_data()->get_total_rows()
+                                                        * B.get_data()->get_total_cols(),
                                         B.get_data()->get_scalings(),
                                         0,
                                         NULL,
@@ -697,7 +707,7 @@ void GPUMuller::read_C( int offset, // This is the offset for both the GPU
     }
     err_num = clEnqueueReadBuffer(  queue,
                                     d_Cs,
-                                    CL_FALSE,
+                                    CL_TRUE,
                                     offset,
                                     //C.get_total_rows() * C.get_total_cols()*
                                     //sizeof(int),
@@ -728,10 +738,32 @@ void GPUMuller::eval_C(int row_offset, int col_offset, int height, int width)
     if (ctx == NULL)
         setup_context();
     else
+    {
         check_buffers();
+    }
 
-    print_A(); // XXX temp
-    print_B(); // XXX temp
+    //print_A(); // XXX temp
+    /*
+    double* temp_A = A.get_data()->get_slice_double(A.get_row_offset(),
+                                                    A.get_col_offset(),
+                                                    A.get_bound_rows(),
+                                                    A.get_bound_cols());
+    double* temp_B = B.get_data()->get_slice_double(B.get_row_offset(),
+                                                    B.get_col_offset(),
+                                                    B.get_bound_rows(),
+                                                    B.get_bound_cols());
+    */
+    /*
+    print_double_mat(   temp_A,
+                        0,
+                        0,
+                        A.get_bound_rows(),
+                        A.get_bound_cols(),
+                        A.get_bound_rows(),
+                        A.get_bound_cols());
+    */
+    //print_B(); // XXX temp
+    //print_C();
 
     multiply();
     read_C( 0,
@@ -740,8 +772,71 @@ void GPUMuller::eval_C(int row_offset, int col_offset, int height, int width)
             C.get_data()->get_scalings()); // XXX temp
     /*
     */
+    /*
+    double* temp_C = C.get_data()->get_slice_double(C.get_row_offset(),
+                                                    C.get_col_offset(),
+                                                    C.get_bound_rows(),
+                                                    C.get_bound_cols());
+    double* naive_C = naive_matrix_multiply_double( temp_A,
+                                                    temp_B,
+                                                    0, // ARO
+                                                    0, // ACO
+                                                    0, // BRO
+                                                    0, // BCO
+                                                    A.get_bound_rows(), // AH
+                                                    A.get_bound_rows(), //ANR
+                                                    A.get_bound_cols(), // UD
+                                                    A.get_bound_cols(), //UDt
+                                                    B.get_bound_cols(), // BW
+                                                    B.get_bound_cols()); //BNC
+
+    */
+    /*
+    print_double_mat(   temp_C,
+                        0,
+                        0,
+                        C.get_bound_rows(),
+                        C.get_bound_cols(),
+                        C.get_bound_rows(),
+                        C.get_bound_cols());
+    print_double_mat(   naive_C,
+                        0,
+                        0,
+                        C.get_bound_rows(),
+                        C.get_bound_cols(),
+                        C.get_bound_rows(),
+                        C.get_bound_cols());
+    */
+    /*
+    double thresh = 1e-6;
+    for (int i = 0; i < C.get_bound_rows() * C.get_bound_cols(); i++)
+    {
+        double error = (temp_C[i] - naive_C[i])/non_zero_max(temp_C[i], naive_C[i]);
+        if (error > thresh)
+        {
+            int row = i / C.get_bound_cols();
+            int col = i % C.get_bound_cols();
+            cout    << "Answer is Wrong. Thresh: "
+                    << thresh
+                    << ", error: "
+                    << error
+                    << " at: "
+                    << row
+                    << ", "
+                    << col
+                    << endl
+                    << "Values: "
+                    << temp_C[i]
+                    << ", "
+                    << naive_C[i]
+                    << endl;
+
+            break;
+        }
+    }
+    */
     evaluated = true;
-    print_C(); // XXX temp
+    //print_C(); // XXX temp
     //cout << "C after multiply: " << endl;
     //print_C(0, 0, C.get_total_rows(), C.get_total_cols());
 }
@@ -788,10 +883,12 @@ double* GPUMuller::get_C_double(int row_offset, int col_offset, int height, int 
     //cout << "B id is: " << B.get_data()->get_id() << endl;
     //cout << "C id is: " << C.get_data()->get_id() << endl;
     // XXX um, how about we use the actual offsets?
+    /*
     if (!evaluated)
     {
         eval_C(row_offset, col_offset, height, width);
     }
+    */
 
     read_C( 0,
             C.get_data()->get_total_rows() * C.get_data()->get_total_cols(),
@@ -800,16 +897,33 @@ double* GPUMuller::get_C_double(int row_offset, int col_offset, int height, int 
 
 
     //C.get_data()->print_mat(row_offset, col_offset, height, width);
+    /*
     cout << endl << endl << endl;
     cout << "Root conditionals earlier: " << endl;
-    double* test = C.get_data()->get_slice_double(row_offset, col_offset, width, height);
+    double* test = C.get_data()->get_slice_double(row_offset, col_offset,
+    height, width);
+    cout    << "RO, CO W, H: "
+            << row_offset
+            << ", "
+            << col_offset
+            << ", "
+            << width
+            << ", "
+            << height
+            << endl;
     for (int i = 0; i < width*height; i++)
     {
         cout << test[i] << " ";
-        if (i % width == 0)
+        if (i % width == width-1)
             cout << endl;
     }
+    */
     /*
+    cout << "openCL model: " << endl;
+    B.get_data()->print_mat();
+
+    cout << "openCL data: " << endl;
+    C.get_data()->print_mat();
     */
 
     //cout << "RO: " << row_offset << " CO: " << col_offset << " h: " << height

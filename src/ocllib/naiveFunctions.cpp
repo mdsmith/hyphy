@@ -2,7 +2,6 @@
 #include <iostream>
 using namespace std;
 
-// XXX offset changed, check
 float* naive_matrix_multiply(   float A[],
                                 float B[],
                                 int A_row_offset,

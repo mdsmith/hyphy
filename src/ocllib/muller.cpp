@@ -283,6 +283,27 @@ void Muller::print_A()
     A.print_bound();
 }
 
+
+double* Muller::get_double_bound_A()
+{
+    return A.get_bound();
+}
+
+double* Muller::get_double_bound_B()
+{
+    return B.get_bound();
+}
+
+double* Muller::get_double_bound_C()
+{
+    return C.get_bound();
+}
+
+double* Muller::get_A()
+{
+    return A.get_bound();
+}
+
 void Muller::print_A(int row_offset, int col_offset, int num_rows, int num_cols)
 {
     A.get_data()->print_mat(row_offset, col_offset, num_rows, num_cols);

@@ -4,21 +4,6 @@
 
 //#define WOLFRAM
 
-// XXX change this such that there is a MatrixData class that stores
-// pointers to the following:
-//      original data
-//      scaled data
-//      scalings
-//      padded data
-// Such that two matrices can point to the same MatrixData class but with
-// different decorators (bounds etc)
-// XXX the above arrays would need to be kept coherent or updated before
-// use (write/accession). When you set one do you update the others like with
-// the scaling methods? Probably...
-// XXX So how would this resolve the "set_[AB](double* m...)" issue....
-//      - if you make a set method that accepts other matrices you could just
-//      point to the same MatrixData object. That is probably the least
-//      ambiguous way of going about this.
 
 #include "matrix.h"
 #include <math.h>
@@ -71,6 +56,11 @@ MatrixData* Matrix::get_data()
 }
 
 
+void Matrix::transpose()
+{
+    m_data->transpose();
+}
+
 void Matrix::bound_data(int row_offset, int col_offset, int h, int w)
 {
     this->row_offset = row_offset;
@@ -83,6 +73,12 @@ void Matrix::bound_data(int row_offset, int col_offset, int h, int w)
 void Matrix::print_bound()
 {
     m_data->print_mat(row_offset, col_offset, h, w);
+}
+
+
+double* Matrix::get_bound()
+{
+    return m_data->get_slice_double(row_offset, col_offset, h, w);
 }
 
 void Matrix::set_data(MatrixData* md)

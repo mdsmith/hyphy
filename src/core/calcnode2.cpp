@@ -299,6 +299,9 @@ _Parameter  _TheTree::VerySimpleLikelihoodEvaluator   (_SimpleList&          upd
 
         bool    isLeaf     = nodeCode < flatLeaves.lLength;
 
+        //printf("Node: %li to %li\n", nodeCode, parentCode +
+        //flatLeaves.lLength);
+
         if (!isLeaf) {
             nodeCode -=  flatLeaves.lLength;
         }

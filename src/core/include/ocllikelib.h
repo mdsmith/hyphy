@@ -45,6 +45,7 @@ public:
                             long* elNodeFlags,
                             _SimpleList& taggedInternals,
                             _GrowingVector* lNodeResolutions);
+    double naive_likelihood();
     ~OCLlikeEval();
 };
 

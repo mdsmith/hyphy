@@ -2,6 +2,7 @@
 #define SCALAR 10
 #define SCAL_THRESH 1e-10
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
 
 __kernel void matMul(
                 __global float* A,
@@ -69,6 +70,8 @@ __kernel void matMul(
 
     float Csub_sig = 0.0f;
     int Csub_exp = 0;
+    int test_exp = 0;
+    bool test = true;
 
     // Loop over all the sub-matrices of A and B
     // required to compute the block sub-matrix
@@ -131,9 +134,36 @@ __kernel void matMul(
             float c_sig = a_sig * b_sig;
             int c_exp = a_exp + b_exp;
             int new_exp = MAX(c_exp, Csub_exp);
-            Csub_sig    = Csub_sig * pow( 10.0f, (float)new_exp-(float)Csub_exp)
-                        + c_sig * pow(10.0f, (float)new_exp - (float)c_exp);
+            //Csub_sig    = Csub_sig * pow( 10.0f, (float)new_exp-(float)Csub_exp)
+                        //+ c_sig * pow(10.0f, (float)new_exp - (float)c_exp);
+            float scaled_c_sig =    c_sig
+                                    * pow(  10.0f,
+                                            -1.0f
+                                            * ( (float)new_exp
+                                                - (float)c_exp
+                                              )
+                                         );
+            float scaled_c_sub_sig =    Csub_sig
+                                        * pow(  10.0f,
+                                                -1.0f
+                                                * ( (float)new_exp
+                                                    - (float)Csub_exp
+                                                  )
+                                             );
+
+            Csub_sig = scaled_c_sig + scaled_c_sub_sig;
+            //Csub_sig    = Csub_sig * pow( 10.0f, (float)new_exp-(float)Csub_exp)
+                        //+ c_sig * pow(10.0f, (float)new_exp - (float)c_exp);
+            //Csub_sig = Csub_sig * pow(10.0f, (float)Csub_exp) + c_sig *
+            //pow(10.0f, (float)c_exp); // XXX temp
             Csub_exp = new_exp;
+            /*
+            if (test)
+            {
+                test = false;
+                test_exp = new_exp;
+            }
+            */
 
             //Csub += As[ty][k] * Bs[k][tx];
         }
@@ -144,26 +174,28 @@ __kernel void matMul(
         barrier(CLK_LOCAL_MEM_FENCE);
 
     }
+    /*
     while (Csub_sig < SCAL_THRESH && Csub_sig > 0)
     {
         Csub_sig *= SCALAR;
-        Csub_exp += 1;
+        Csub_exp -= 1;
     }
     while (Csub_sig > -1*SCAL_THRESH && Csub_sig < 0)
     {
         Csub_sig *= SCALAR;
-        Csub_exp += 1;
+        Csub_exp -= 1;
     }
     while (Csub_sig > 1/SCAL_THRESH)
     {
         Csub_sig /= SCALAR;
-        Csub_exp -= 1;
+        Csub_exp += 1;
     }
     while (Csub_sig < -1/SCAL_THRESH)
     {
         Csub_sig /= SCALAR;
-        Csub_exp -= 1;
+        Csub_exp += 1;
     }
+    */
 
     // Write the block sub-matrix to device memory;
     // each thread writes one element
@@ -172,12 +204,49 @@ __kernel void matMul(
     {
         //C[c_offset + wB*gy + gx] = get_global_size(1); // XXX temp
         if (overwrite)
+        {
             C[c_offset + wB*gy + gx] = Csub_sig;
+            Cscalings[c_offset + wB * gy + gx] = Csub_exp;
+            //Cscalings[c_offset + wB * gy + gx] = test_exp;
+        }
         else
-            C[c_offset + wB*gy + gx] *= Csub_sig;
+        {
+            //C[c_offset + wB*gy + gx] *= Csub_sig;
+            float old_sig = C[c_offset + wB*gy + gx];
+            float new_sig = Csub_sig * old_sig;
+
+            //Cscalings[c_offset + wB * gy + gx] += Csub_exp;
+            int old_exp = Cscalings[c_offset + wB * gy + gx];
+            int new_exp = Csub_exp + old_exp;
+
+            /*
+            while (new_sig < SCAL_THRESH && new_sig > 0)
+            {
+                new_sig *= SCALAR;
+                new_exp -= 1;
+            }
+            while (new_sig > -1*SCAL_THRESH && new_sig < 0)
+            {
+                new_sig *= SCALAR;
+                new_exp -= 1;
+            }
+            while (new_sig > 1/SCAL_THRESH)
+            {
+                new_sig /= SCALAR;
+                new_exp += 1;
+            }
+            while (new_sig < -1/SCAL_THRESH)
+            {
+                new_sig /= SCALAR;
+                new_exp += 1;
+            }
+            */
+            C[c_offset + wB*gy + gx] = new_sig;
+            Cscalings[c_offset + wB * gy + gx] = new_exp;
+        }
         /*
         */
-        Cscalings[c_offset + wB * gy + gx] = Csub_exp;
+        //Cscalings[c_offset + wB * gy + gx] = Csub_exp;
     }
 }
 
