@@ -174,12 +174,6 @@ void OCLlikeEval::setupContext()
 
 double OCLlikeEval::evaluate()
 {
-    // XXX HERE so the issue is that these huge numbers are coming up later
-    // on when they really shouldn't be. Interesting these usually occur when
-    // what appears to be an incorrect transition matrix is used! Is there a
-    // chance that these matrices aren't being updated to the right location,
-    // aren't being pulled from the right location, or that kernels
-    // concerning the proper nodes aren't being launched?
     for (int n =0; n < updateNodes.lLength; n++)
     {
         int nodeCode = updateNodes.lData[n];
@@ -204,9 +198,15 @@ double OCLlikeEval::evaluate()
                 }
                 */
                 //modelCache[uniqueNodeCode * alphabetDimension * alphabetDimension + pc *
-                modelCache[n * alphabetDimension * alphabetDimension + pc *
-                alphabetDimension + cc] = (double)(tMatrix[cc *
-                alphabetDimension + pc]);
+                modelCache[ n
+                            * alphabetDimension
+                            * alphabetDimension
+                            + pc
+                            * alphabetDimension
+                            + cc]
+                            = (double)(tMatrix[ cc
+                                                * alphabetDimension
+                                                + pc]);
             }
             /*
             if (uniqueNodeCode == 9)
@@ -217,9 +217,10 @@ double OCLlikeEval::evaluate()
         }
     }
     //cout << flatParents.lLength-1 << " total models" << endl;
+    int updated_block = updateNodes.lLength * alphabetDimension;
     int BNR = (flatParents.lLength - 1) * alphabetDimension;
     int BNC = alphabetDimension;
-    gm.update_B(modelCache, 0, 0, BNR, BNC, BNR, BNC);
+    gm.update_B(modelCache, 0, 0, updated_block, BNC, BNR, BNC);
 
     int ARO, ACO, AH, UD, BW, BRO, BCO, CRO, CCO;
 

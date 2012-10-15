@@ -27,6 +27,7 @@ bool cleanBuff;
 bool a_dirt;
 bool b_dirt;
 bool c_dirt;
+bool ctx_set;
 cl_context ctx;
 cl_kernel kernel;
 cl_command_queue queue;
@@ -50,6 +51,8 @@ GPUMuller::GPUMuller()
     c_dirt = false;
     evaluated = false;
     overwrite = true;
+    ctx_set = false;
+    //setup_context();
 }
 
 
@@ -145,11 +148,6 @@ void GPUMuller::bound_B(int row_offset, int col_offset, int ud, int bw)
 
 void GPUMuller::setup_context()
 {
-    if (!C.is_set())
-        set_C(  new float[A.get_bound_rows()*B.get_bound_cols()],
-                A.get_bound_rows(),
-                B.get_bound_cols()
-                );
 
     cl_platform_id plat = NULL;
     cl_device_id *devices = NULL;
@@ -165,6 +163,7 @@ void GPUMuller::setup_context()
         exit(err_num);
     }
 
+    // XXX move to multiple devices
     // Dev setup
     err_num = clGetDeviceIDs(plat, CL_DEVICE_TYPE_GPU, 0, NULL, &dev_count);
     devices = (cl_device_id *)malloc(dev_count * sizeof(cl_device_id));
@@ -223,7 +222,7 @@ void GPUMuller::setup_context()
     }
 
     // build program
-    err_num = clBuildProgram(prog, 1, &device, "-cl-mad-enable", NULL, NULL);
+    err_num = clBuildProgram(prog, 1, &device, "-cl-fast-relaxed-math -cl-mad-enable", NULL, NULL);
     if (err_num != CL_SUCCESS)
     {
         cout << "build fail" << endl;
@@ -237,15 +236,20 @@ void GPUMuller::setup_context()
         cout << "make kernel fail" << endl;
         exit(err_num);
     }
+    ctx_set = true;
+}
 
+// XXX Makes this more efficient
+void GPUMuller::update_buffers()
+{
+    if (!C.is_set())
+        set_C(  new float[A.get_bound_rows()*B.get_bound_cols()],
+                A.get_bound_rows(),
+                B.get_bound_cols()
+                );
     A.get_data()->check_scalings();
     B.get_data()->check_scalings();
     C.get_data()->check_scalings();
-    update_buffers();
-}
-
-void GPUMuller::update_buffers()
-{
     // array rounding
     //if (    A.get_data()->get_scaled_float() == B.get_data()->get_scaled_float()
         //&&  A.get_data()->get_scaled_float() == C.get_data()->get_scaled_float())
@@ -447,6 +451,7 @@ void GPUMuller::update_buffers()
 
 // INFO updating buffers only works if you're replacing the whole buffer
 // (nothing on the GPU will be written back before being overwritten)
+// XXX make this more efficient
 void GPUMuller::check_buffers()
 {
     if (!cleanBuff)
@@ -671,7 +676,7 @@ void GPUMuller::read_C( int offset, // This is the offset for both the GPU
     err_num = clEnqueueReadBuffer(  queue,
                                     d_C,
                                     CL_TRUE,
-                                    offset,
+                                    offset * sizeof(float),
                                     //C.get_total_rows() * C.get_total_cols() *
                                     //sizeof(float),
                                     size * sizeof(float),
@@ -708,7 +713,7 @@ void GPUMuller::read_C( int offset, // This is the offset for both the GPU
     err_num = clEnqueueReadBuffer(  queue,
                                     d_Cs,
                                     CL_TRUE,
-                                    offset,
+                                    offset * sizeof(int),
                                     //C.get_total_rows() * C.get_total_cols()*
                                     //sizeof(int),
                                     size * sizeof(int),
@@ -735,8 +740,12 @@ void GPUMuller::eval_C(int row_offset, int col_offset, int height, int width)
     //print_A();
     //print_B();
 
-    if (ctx == NULL)
+
+    if (!ctx_set)
+    {
         setup_context();
+        check_buffers();
+    }
     else
     {
         check_buffers();
@@ -766,11 +775,11 @@ void GPUMuller::eval_C(int row_offset, int col_offset, int height, int width)
     //print_C();
 
     multiply();
+    /*
     read_C( 0,
             C.get_data()->get_total_rows() * C.get_data()->get_total_cols(),
             C.get_data()->get_scaled_float(),
             C.get_data()->get_scalings()); // XXX temp
-    /*
     */
     /*
     double* temp_C = C.get_data()->get_slice_double(C.get_row_offset(),
@@ -852,8 +861,15 @@ float* GPUMuller::get_C(int row_offset, int col_offset, int height, int width)
         eval_C(row_offset, col_offset, height, width);
     }
     // XXX um, how about we use the actual offsets?
+    /*
     read_C( 0,
             C.get_data()->get_total_rows() * C.get_data()->get_total_cols(),
+            C.get_data()->get_scaled_float(),
+            C.get_data()->get_scalings());
+    */
+
+    read_C( row_offset*C.get_data()->get_total_cols(),
+            height * C.get_data()->get_total_cols(),
             C.get_data()->get_scaled_float(),
             C.get_data()->get_scalings());
 
@@ -890,10 +906,18 @@ double* GPUMuller::get_C_double(int row_offset, int col_offset, int height, int 
     }
     */
 
+    /*
     read_C( 0,
             C.get_data()->get_total_rows() * C.get_data()->get_total_cols(),
             C.get_data()->get_scaled_float(),
             C.get_data()->get_scalings());
+    */
+    read_C( row_offset*C.get_data()->get_total_cols(),
+            height * C.get_data()->get_total_cols(),
+            C.get_data()->get_scaled_float(),
+            C.get_data()->get_scalings());
+    /*
+    */
 
 
     //C.get_data()->print_mat(row_offset, col_offset, height, width);
