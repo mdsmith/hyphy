@@ -153,9 +153,10 @@ public:
     // change the codeBase value for this node
     // this will resize the vector used to handle frequencies
 
-    void                RecomputeMatrix  (long = 0, long = 1,_Matrix* = nil, _List* = nil, _SimpleList* = nil);
+    bool                RecomputeMatrix  (long = 0, long = 1,_Matrix* = nil, _List* = nil, _SimpleList* = nil, _List* = nil);
     // reexponentiate the transition matrix and
     // store it in compExp.
+    // return TRUE if the matrix is an explicit exponential form
 
     virtual bool        HasChanged       (void);
     virtual bool        NeedToExponentiate(long = -1);
@@ -378,7 +379,7 @@ public:
     bool            IsCurrentNodeTheRoot                (void);
     bool            IsDegenerate                        (void);
 
-    virtual _PMathObj       Execute                             (long, _PMathObj = nil , _PMathObj = nil);
+    virtual _PMathObj       Execute                             (long, _PMathObj = nil , _PMathObj = nil, _PMathObj = nil);
     virtual void            EdgeCount                           (long&, long&);
     // SLKP 20100827: a utility function to count edges in a tree
     //              : note that the root node WILL be counted as an internal node
@@ -555,7 +556,7 @@ public:
         return TREE;
     }
 
-    virtual  _PMathObj      Execute                     (long, _PMathObj = nil , _PMathObj = nil);
+    virtual  _PMathObj      Execute                     (long, _PMathObj = nil , _PMathObj = nil, _PMathObj = nil);
     virtual  _PMathObj      TEXTreeString               (_PMathObj);
     virtual  _PMathObj      PlainTreeString             (_PMathObj,_PMathObj);
 
@@ -629,9 +630,9 @@ public:
     }
 
     void        ScanAndAttachVariables          (void);
-    void        ScanForVariables                (_AVLList& l, _AVLList& l2);
+    void        ScanForVariables                (_AVLList& l, _AVLList& l2, _AVLListX* tagger = nil, long weight = 0);
     void        ScanForDVariables               (_AVLList& l, _AVLList& l2);
-    void        ScanForGVariables               (_AVLList&, _AVLList&);
+    void        ScanForGVariables               (_AVLList&, _AVLList&, _AVLListX* tagger = nil, long weight = 0);
     void        ScanForCVariables               (_AVLList&);
     void        MolecularClock                  (_String&, _List&);
 

@@ -58,12 +58,17 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "stack.h"
 #include "variable.h"
 #include "variablecontainer.h"
+#include "trie.h"
+
 //End parser specific includes
 
 #include "matrix.h"
 
 //__________________________________________________________________________________
 extern  _List BuiltInFunctions;
+
+class   _ExecutionList; 
+
 //__________________________________________________________________________________
 
 #define  USE_POINTER_VC
@@ -76,8 +81,9 @@ extern      _SimpleList     BuiltInFunctionParameterCount,
 
 extern      _AVLListX       variableNames;
 
-extern      _String         UnOps,
-            HalfOps;
+extern      _String         HalfOps;
+
+extern      _Trie           UnOps;
 
 extern      _Parameter      printDigits,
             verbosityLevel;
@@ -91,8 +97,8 @@ _Variable*  FetchVar        (long index);
 _PMathObj   FetchObjectFromVariableByType       (_String*, const unsigned long, long = -1, _String* = nil);
 _PMathObj   FetchObjectFromVariableByTypeIndex  (long, const unsigned long, long = -1, _String* = nil);
 _String     FetchObjectNameFromType (const unsigned long);
-_String&    AppendContainerName
-(_String&, _VariableContainer*);
+_String&    AppendContainerName     (_String&, _VariableContainer*);
+_String*    FetchMathObjectNameOfTypeByIndex (const unsigned long objectClass, const long objectIndex);
 
 void        DeleteVariable  (_String&, bool deleteself = true);
 void        DeleteTreeVariable
@@ -114,8 +120,8 @@ void        FindUnusedObjectName
 void        FindUnusedObjectName
 (_String&, _String&, _AVLListX&, bool = false);
 
-bool        ExpressionCalculator
-(void);
+bool        ExpressionCalculator(void);
+bool        ExpressionCalculator(_String data);
 
 _Variable*  CheckReceptacle
 (_String*,_String, bool = true, bool = false);
@@ -127,7 +133,7 @@ bool        CheckReceptacleAndStore
 (_String,_String, bool, _PMathObj, bool = true);
 
 _Variable*  CheckReceptacleCommandID
-(_String* name, const long id, bool checkValid, bool isGlobal = false);
+(_String* name, const long id, bool checkValid, bool isGlobal = false, _ExecutionList* context = nil);
 
 bool        CheckReceptacleCommandIDAndStore
 (_String* name, const long id, bool checkValid, _PMathObj v, bool dup = true, bool isGlobal = false);
@@ -172,6 +178,7 @@ _Parameter  Power       (_Parameter, _Parameter);
 _Parameter  RandomNumber(_Parameter, _Parameter);
 _Parameter  ExpNumbers  (_Parameter);
 _Parameter  LogNumbers  (_Parameter);
+_Parameter  AbsNumber   (_Parameter);
 _Parameter  MinusNumber (_Parameter);
 _Parameter  MaxNumbers  (_Parameter, _Parameter);
 _Parameter  MinNumbers  (_Parameter, _Parameter);

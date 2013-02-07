@@ -96,7 +96,7 @@ _FString::_FString (_String& data, bool meta)
         }
 
         theString = new _String (data.sLength,true);
-        for (long k=0; k<data.sLength; k++) {
+        for (unsigned long k=0; k<data.sLength; k++) {
             char c = data.sData[k];
             if (c=='\\') {
                 if (k<data.sLength-1) {
@@ -572,12 +572,12 @@ _PMathObj _FString::RerootTree (void)
 
 //__________________________________________________________________________________
 
-_PMathObj _FString::Evaluate ()
+_PMathObj _FString::Evaluate (_PMathObj context)
 {
     if (theString && theString->sLength) {
         _String     s (*theString);
-        _Formula    evaluator (s);
-        _PMathObj   evalTo = evaluator.Compute();
+        _Formula    evaluator (s, (_VariableContainer*)context);
+        _PMathObj   evalTo = evaluator.Compute(0,(_VariableContainer*)context);
 
         if (evalTo && !terminateExecution) {
             evalTo->AddAReference();
@@ -587,7 +587,28 @@ _PMathObj _FString::Evaluate ()
     return new _Constant (.0);
 }
 
-_PMathObj _FString::Execute (long opCode, _PMathObj p, _PMathObj p2)   // execute this operation with the second arg if necessary
+//__________________________________________________________________________________
+
+_PMathObj _FString::Dereference(bool ignore_context, _PMathObj context) {
+    _String referencedVariable = *theString;
+    if (!ignore_context && context) {
+        referencedVariable = AppendContainerName(referencedVariable, (_VariableContainer *)context);
+    }
+    _PMathObj result = FetchObjectFromVariableByType(&referencedVariable, HY_ANY_OBJECT); 
+    //printf ("\n\nDereferencing %s in this context %x\n\n", referencedVariable.sData, context);
+    if (!result) {
+        WarnError(_String("Failed to dereference '") & referencedVariable & "'");
+        result = new _FString;
+    } else {
+        result = (_PMathObj)result->makeDynamic();
+    }
+    return result;
+}
+
+//__________________________________________________________________________________
+
+
+_PMathObj _FString::Execute (long opCode, _PMathObj p, _PMathObj p2, _PMathObj context)   // execute this operation with the second arg if necessary
 {
     switch (opCode) {
     case HY_OP_CODE_NOT: // !
@@ -632,10 +653,15 @@ _PMathObj _FString::Execute (long opCode, _PMathObj p, _PMathObj p2)   // execut
     }
     break;
     case HY_OP_CODE_MUL: // *
-        if (p->ObjectClass() == MATRIX) {
-            return      MapStringToVector (p);
+        if (p) {
+         // NOT a dereference
+            if (p->ObjectClass() == MATRIX) {
+                return      MapStringToVector (p);
+            } else {
+                return new _Constant(AddOn(p));
+            }
         } else {
-            return new _Constant(AddOn(p));
+            return Dereference(false, context);
         }
         break;
     case HY_OP_CODE_ADD: // +
@@ -670,7 +696,7 @@ _PMathObj _FString::Execute (long opCode, _PMathObj p, _PMathObj p2)   // execut
         return Differentiate(p);
         break;
     case HY_OP_CODE_EVAL: // Eval
-        return Evaluate();
+        return Evaluate(context);
         break;
     case HY_OP_CODE_EXP: // Exp
         return new _Constant (theString->LempelZivProductionHistory(nil));
@@ -715,7 +741,9 @@ _PMathObj _FString::Execute (long opCode, _PMathObj p, _PMathObj p2)   // execut
         return Type();
         break;
     case HY_OP_CODE_POWER: // Replace (^)
-        return ReplaceReqExp (p);
+        if (p)
+            return ReplaceReqExp (p);
+        return Dereference(true, context);
         break;
     case HY_OP_CODE_OR: // Match all instances of the reg.ex (||)
         return EqualRegExp (p, true);
@@ -806,15 +834,15 @@ _PMathObj   _FString::CountGlobalObjects (void)
     }
 
     switch (standardType) {
-    case 0:
+    case HY_BL_LIKELIHOOD_FUNCTION:
         return new _Constant (likeFuncList.lLength);
-    case 1:
+    case HY_BL_DATASET:
         return new _Constant (dataSetList.lLength);
-    case 2:
+    case HY_BL_DATASET_FILTER:
         return new _Constant (dataSetFilterList.lLength);
-    case 3:
+    case HY_BL_HBL_FUNCTION:
         return new _Constant (batchLanguageFunctionNames.lLength);
-    case 4: {
+    case HY_BL_TREE: {
         _SimpleList tc;
         long        si,
                     vi = variableNames.Traverser (tc,si,variableNames.GetRoot());
@@ -827,9 +855,9 @@ _PMathObj   _FString::CountGlobalObjects (void)
         break;
     }
 
-    case 5:
+    case HY_BL_SCFG:
         return new _Constant (scfgList.lLength);
-    case 6:
+    case HY_BL_VARIABLE:
         return new _Constant (variableNames.countitems());
 
     }

@@ -60,7 +60,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define MOD_ADLER 65521
 
 _String   compileDate = __DATE__,
-          __KERNEL__VERSION__ = _String ("2.11") & compileDate.Cut (7,10) & compileDate.Cut (0,2).Replace("Jan", "01", true).
+          __KERNEL__VERSION__ = _String ("2.13") & compileDate.Cut (7,10) & compileDate.Cut (0,2).Replace("Jan", "01", true).
                                                                                                   Replace("Feb", "02", true).
                                                                                                   Replace("Mar", "03", true).
                                                                                                   Replace("Apr", "04", true).
@@ -77,8 +77,7 @@ _String   compileDate = __DATE__,
 
 _String     empty(""),
             emptyAssociativeList ("{}"),
-            hyphyCiteString
-            ("\nPlease cite S.L. Kosakovsky Pond, S. D. W. Frost and S.V. Muse. (2005) HyPhy: hypothesis testing using phylogenies. Bioinformatics 21: 676-679 if you use HyPhy in a publication\nIf you are a new HyPhy user, the tutorial located at http://www.hyphy.org/docs/HyphyDocs.pdf may be a good starting point.\n");
+            hyphyCiteString ("\nPlease cite S.L. Kosakovsky Pond, S. D. W. Frost and S.V. Muse. (2005) HyPhy: hypothesis testing using phylogenies. Bioinformatics 21: 676-679 if you use HyPhy in a publication\nIf you are a new HyPhy user, the tutorial located at http://www.hyphy.org/docs/HyphyDocs.pdf may be a good starting point.\n");
 
 char        defaultReturn = 0;
 unsigned    long _String::storageIncrement = 32;
@@ -178,9 +177,9 @@ _String::_String (const _String& source, long from, long to)
             from = 0;
         }
 
-        if (to == -1) {
+        if (to < 0 || to >= source.sLength) {
             to   = ((long)source.sLength)-1;
-        }
+        } 
 
         if (to>=from) {
             sLength = to-from+1;
@@ -370,6 +369,12 @@ void _String::operator << (const _String* s)
         //memcpy(sData+sLength,s->sData,s->sLength);
         sLength+=s->sLength;
     }
+}
+
+// append operator
+void _String::operator << (const _String& s)
+{
+   (*this) << &s;
 }
 
 //Append operator
@@ -1861,55 +1866,71 @@ void    _String::ProcessParameter(void)
 //Filename and Platform Methods
 //==============================================================
 
-void    _String::ProcessFileName (bool isWrite, bool acceptStringVars, Ptr theP, bool assume_platform_specific)
+bool    _String::ProcessFileName (bool isWrite, bool acceptStringVars, Ptr theP, bool assume_platform_specific, _ExecutionList * caller)
 {
-    if (Equal(&getFString) || Equal (&tempFString)) { // prompt user for file
-        if (Equal (&tempFString)) {
-            #if not defined __MINGW32__ && not defined __WINDOZE__
-                #ifdef __MAC__
-                    char tmpFileName[] = "HYPHY-XXXXXX";
+    _String errMsg;
+    
+    try {
+        if (Equal(&getFString) || Equal (&tempFString)) { // prompt user for file
+            if (Equal (&tempFString)) {
+                #if not defined __MINGW32__ && not defined __WINDOZE__
+                    #ifdef __MAC__
+                        char tmpFileName[] = "HYPHY-XXXXXX";
+                    #else
+                        char tmpFileName[] = "/tmp/HYPHY-XXXXXX";
+                    #endif
+                    
+                    int fileDescriptor = mkstemp(tmpFileName);
+                    if (fileDescriptor == -1){
+                        throw ("Failed to create a temporary file name");
+                    }
+                    *this = tmpFileName;
+                    CheckReceptacleAndStore(&useLastFString,empty,false, new _FString (*this, false), false);
+                    close (fileDescriptor);
+                    return true;
                 #else
-                    char tmpFileName[] = "/tmp/HYPHY-XXXXXX";
+                    throw (tempFString & " is not implemented for this platform");
                 #endif
-                
-                int fileDescriptor = mkstemp(tmpFileName);
-                if (fileDescriptor == -1){
-                    WarnError ("Failed to create a temporary file name");
-                    return;
-                }
-                *this = tmpFileName;
-                CheckReceptacleAndStore(&useLastFString,empty,false, new _FString (*this, false), false);
-                close (fileDescriptor);
-                return;
-            #else
-                WarnError (tempFString & " is not implemented for this platform");
-            #endif
-        } else {
-            if (!isWrite) {
-                *this = ReturnFileDialogInput();
             } else {
-                *this = WriteFileDialogInput ();
+                if (!isWrite) {
+                    *this = ReturnFileDialogInput();
+                } else {
+                    *this = WriteFileDialogInput ();
+                }
             }
+            ProcessFileName(false,false,theP,
+            #if defined __MAC__ || defined __WINDOZE__
+                true
+            #else
+                false
+            #endif
+            ,caller);
+            
+            CheckReceptacleAndStore(&useLastFString,empty,false, new _FString (*this, false), false);
+            return true;
         }
-        ProcessFileName(false,false,theP,
-        #if defined __MAC__ || defined __WINDOZE__
-            true
-        #else
-            false
-        #endif
-        );
-        CheckReceptacleAndStore(&useLastFString,empty,false, new _FString (*this, false), false);
-        return;
-    }
 
-    if (acceptStringVars) {
-        *this = ProcessLiteralArgument (this,(_VariableContainer*)theP);
-    } else {
-        StripQuotes();
-    }
+        if (acceptStringVars) {
+            *this = ProcessLiteralArgument (this,(_VariableContainer*)theP, caller);
+            if (caller && caller->IsErrorState()) {
+                return false;
+            }
+        } else {
+            StripQuotes();
+        }
 
-    if (!sLength) {
-        return;
+        if (!sLength) {
+            return true;
+        }
+    }
+    
+    catch (_String errmsg) {
+        if (caller) {
+            caller->ReportAnExecutionError(errMsg);
+        } else {
+            WarnError(errMsg);
+        }
+        return false;
     }
 
 
@@ -1934,7 +1955,7 @@ void    _String::ProcessFileName (bool isWrite, bool acceptStringVars, Ptr theP,
             // check the last stored absolute path and reprocess this relative path into an absolute.
             while (beginswith("../")) {
                 if ( (f = lastPath->FindBackwards('/',0,f)-1) ==-1) {
-                    return;
+                    return true;
                 }
                 Trim(3,-1);
                 k++;
@@ -2082,6 +2103,7 @@ void    _String::ProcessFileName (bool isWrite, bool acceptStringVars, Ptr theP,
         }
     }
 #endif
+    return true;
 }
 
 //Compose two UNIX paths (abs+rel)
@@ -2409,4 +2431,49 @@ void _String::RegExpMatchOnce(_String* pattern, _SimpleList& matchedPairs, bool 
             WarnError (GetRegExpError (errNo));
         }
     }
+}
+
+_String _String::Random(const unsigned long length, const _String * alphabet)
+{
+    _String random (length + 1, true);
+    unsigned long alphabet_length = alphabet?alphabet->sLength:127;
+    if (length > 0 && alphabet_length > 0) {
+        for (unsigned long c = 0; c < length; c++) {
+            unsigned long idx = genrand_int32 () % alphabet_length;
+            if (alphabet) {
+                random << alphabet->sData[idx];
+            } else {
+                random << (char)(1+idx);
+            }
+        }
+    }
+    
+    random.Finalize();
+    return random;
+}
+
+unsigned char _String::ProcessVariableReferenceCases (_String& referenced_object, _String * context) {
+    char first_char = getChar(0);
+    if (first_char == '*' || first_char == '^') {
+        bool is_global_ref = first_char == '^';
+        _String   choppedVarID (*this, 1, -1);
+        if (context) {
+            choppedVarID = *context & '.' & choppedVarID;
+        }
+        _FString * dereferenced_value = (_FString*)FetchObjectFromVariableByType(&choppedVarID, STRING);
+        if (dereferenced_value && dereferenced_value->theString->ProcessVariableReferenceCases (referenced_object) == HY_STRING_DIRECT_REFERENCE) {
+            if (!is_global_ref && context) {
+                referenced_object = *context & '.' & referenced_object;
+            }
+            return is_global_ref?HY_STRING_GLOBAL_DEREFERENCE:HY_STRING_LOCAL_DEREFERENCE;
+        }
+    }
+    
+    if (IsValidIdentifier()) {
+        referenced_object = context? (*context & '.' & *this): (*this);
+        return HY_STRING_DIRECT_REFERENCE;
+    }
+    
+    referenced_object = empty;
+    return HY_STRING_INVALID_REFERENCE;
 }

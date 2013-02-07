@@ -73,7 +73,7 @@ public:
     virtual _PMathObj ReplaceReqExp     (_PMathObj);
     virtual _PMathObj CountGlobalObjects(void);
     virtual _PMathObj FileExists        (void);
-    virtual _PMathObj Evaluate          (void);
+    virtual _PMathObj Evaluate          (_PMathObj context = nil);
     virtual _PMathObj Join              (_PMathObj);
     virtual _PMathObj Differentiate     (_PMathObj);
     virtual unsigned long      ObjectClass       (void) {
@@ -82,10 +82,11 @@ public:
     virtual _PMathObj Compute           (void) {
         return this;
     }
+    _PMathObj         Dereference       (bool ignore_context, _MathObject* context);
 
     virtual _PMathObj MapStringToVector (_PMathObj);
     virtual _PMathObj CharAccess        (_PMathObj,_PMathObj);
-    virtual _PMathObj Execute           (long opCode, _MathObject* p = nil , _MathObject* p2 = nil);
+    virtual _PMathObj Execute           (long opCode, _MathObject* p = nil , _MathObject* p2 = nil, _MathObject* context = nil);
     virtual BaseRef   toStr             (void);
 
     virtual bool      IsVariable        (void) {

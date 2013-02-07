@@ -268,21 +268,6 @@ function exportVarList (_varList)
 /*---------------------------------------------------------*/
 /* restore values of global parameters */
    
-
-function restoreGlobalParameters (_paramStash)
-{
-	_stashKeys = Rows(_paramStash);
-	for (_gb_idx = 0; _gb_idx < Abs (_paramStash); _gb_idx = _gb_idx + 1)
-	{
-		ExecuteCommands (_stashKeys[_gb_idx] + "=" + _paramStash[_stashKeys[_gb_idx]] + ";");
-	} 	
-	return 0;
-}
-
-/*---------------------------------------------------------*/
-/* restore values of global parameters */
-   
-
 function restoreGlobalParameters (_paramStash)
 {
 	_stashKeys = Rows(_paramStash);
@@ -854,7 +839,7 @@ function mapStrings (sourceStr,targetStr)
 	{
 		targetIndexing [targetStr[_i]] = _i + 1;
 	}
-	_d = Abs (targetStr);
+	_d = Abs (sourceStr);
 	for (_i = 0; _i < _d; _i += 1)
 	{
 		mapping [_i] = targetIndexing[sourceStr[_i]] - 1;
