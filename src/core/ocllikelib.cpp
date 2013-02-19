@@ -1,5 +1,4 @@
 /*
-
  HyPhy - Hypothesis Testing Using Phylogenies.
 
  Copyright (C) 1997-now
@@ -34,10 +33,10 @@
  CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
  TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
  */
 
 #ifdef MDSOCL
+//#define OCL_VERBOSE
 
 #include "calcnode.h"
 #include <math.h>
@@ -75,13 +74,18 @@ void OCLlikeEval::init( long siteCount,
     this->iNodeCache = iNodeCache;
     gm = GPUMuller();
     contextSet = false;
-    //cout << "OCLLikeEval initialized!" << endl;
+    #ifdef OCL_VERBOSE
+    cout << "OCLLikeEval initialized!" << endl;
+    #endif
 }
 
 
 void OCLlikeEval::setupContext()
 {
 
+    #ifdef OCL_VERBOSE
+    printf("Setting up the OpenCL context\n");
+    #endif
     //cout << "flatParents: " << flatParents.lLength << endl;
     //cout << "flatNodes: " << flatNodes.lLength << endl;
     //cout << "flatCLeaves: " << flatCLeaves.lLength << endl;
@@ -174,6 +178,9 @@ void OCLlikeEval::setupContext()
 
 double OCLlikeEval::evaluate()
 {
+    #ifdef OCL_VERBOSE
+    printf("Evaluating a tree in the OCLlikeEval object\n");
+    #endif
     for (int n =0; n < updateNodes.lLength; n++)
     {
         int nodeCode = updateNodes.lData[n];
@@ -719,7 +726,9 @@ double OCLlikeEval::evaluate()
 
 double OCLlikeEval::process_results(double* root_conditionals)
 {
-    //cout << "Root Conditionals in processor: " << endl;
+    #ifdef OCL_VERBOSE
+    cout << "Root Conditionals in processor\n" << endl;
+    #endif
     double result = 0.0;
     long root_index = 0;
     for (long s = 0; s < siteCount; s++)
@@ -754,6 +763,9 @@ double OCLlikeEval::eval_likelihood(    _SimpleList& updateNodes,
                                         _SimpleList& taggedInternals,
                                         _GrowingVector* lNodeResolutions)
 {
+    #ifdef OCL_VERBOSE
+    printf("Launching the likelihood evaluator in the OCLlikeEval object\n");
+    #endif
     this->updateNodes = updateNodes;
     this->taggedInternals = taggedInternals;
     this->theFrequencies = theFrequencies;
@@ -908,6 +920,9 @@ double OCLlikeEval::eval_likelihood(    _SimpleList& updateNodes,
 
 double OCLlikeEval::naive_likelihood()
 {
+    #ifdef OCL_VERBOSE
+    printf("Launching the naive evaluator in the OCLlikeEval object\n");
+    #endif
     for  (long nodeID = 0; nodeID < updateNodes.lLength; nodeID++) {
         long    nodeCode   = updateNodes.lData [nodeID],
                 parentCode = flatParents.lData [nodeCode];
@@ -1059,6 +1074,9 @@ double OCLlikeEval::naive_likelihood()
 
 OCLlikeEval::~OCLlikeEval()
 {
+    #ifdef OCL_VERBOSE
+    printf("Destroying OCLlikeEval object\n");
+    #endif
     int i = 0;
 }
 

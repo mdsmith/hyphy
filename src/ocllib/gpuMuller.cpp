@@ -11,16 +11,28 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #if defined(__APPLE__) || defined(APPLE)
-    #include <OpenCL/OpenCL.h>
+    #include <OpenCL/opencl.h>
 #else
     #include <CL/opencl.h>
 #endif
+
+#define STRINGIFY(src) #src
+
+inline const char* Kernels()
+{
+    static const char* kernels =
+        #include "oclKernels.cl"
+        ;
+    return kernels;
+}
+
 using namespace std;
 
 #define BLOCK_SIZE 16
 #define PAD_SIZE 64
 #define SCALAR 10
 #define SCAL_THRESH 1e-10
+#define OCL_VERBOSE
 
 bool evaluated;
 bool cleanBuff;
@@ -34,6 +46,9 @@ cl_command_queue queue;
 size_t global_work_size[2];
 size_t local_work_size[2];
 cl_int err_num;
+double totalMulTime;
+double totalReadTime;
+double totalWriteTime;
 
 cl_mem d_A;
 cl_mem d_As;
@@ -44,6 +59,9 @@ cl_mem d_Cs;
 
 GPUMuller::GPUMuller()
 {
+    totalMulTime = 0;
+    totalReadTime = 0;
+    totalWriteTime = 0;
     //cout << "naiveMuller constructed" << endl;
     cleanBuff = false;
     a_dirt = false;
@@ -212,8 +230,10 @@ void GPUMuller::setup_context()
 
     // prog setup
     // XXX obviously this is a problem
-    const char* source =
-    load_program_source("/Users/martinsmith/Software/hyphy/src/ocllib/oclKernels.cl");
+    const char* source = Kernels();
+    cout << source << endl;
+    //const char* source =
+    //load_program_source("/Users/martinsmith/Software/hyphy/src/ocllib/oclKernels.cl");
     cl_program prog = clCreateProgramWithSource(ctx, 1, &source, NULL, &err_num);
     if (err_num != CL_SUCCESS)
     {
@@ -457,6 +477,11 @@ void GPUMuller::check_buffers()
     if (!cleanBuff)
         update_buffers();
 
+    #ifdef OCL_VERBOSE
+    timeval t1, t2;
+    clFinish(queue);
+    gettimeofday(&t1, NULL);
+    #endif
     if (a_dirt)
     {
         err_num = clEnqueueWriteBuffer( queue,
@@ -535,6 +560,12 @@ void GPUMuller::check_buffers()
         cout << "Error rewritting buffers" << endl;
         exit(err_num);
     }
+    #ifdef OCL_VERBOSE
+    clFinish(queue);
+    gettimeofday(&t2, NULL);
+    totalWriteTime += (t2.tv_sec -t1.tv_sec) * 1000.0;
+    totalWriteTime += (t2.tv_usec - t1.tv_usec) / 1000.0;
+    #endif
 }
 
 
@@ -633,6 +664,9 @@ void GPUMuller::multiply()
     // launch kernel
     timeval t1, t2;
     double elapsedTime;
+    #ifdef OCL_VERBOSE
+    clFinish(queue);
+    #endif
     gettimeofday(&t1, NULL);
 
     //cout << "Global work size: " << global_work_size[0];
@@ -658,6 +692,8 @@ void GPUMuller::multiply()
 
     elapsedTime = (t2.tv_sec -t1.tv_sec) * 1000.0;
     elapsedTime += (t2.tv_usec - t1.tv_usec) / 1000.0;
+    totalMulTime += (t2.tv_sec -t1.tv_sec) * 1000.0;
+    totalMulTime += (t2.tv_usec - t1.tv_usec) / 1000.0;
 
     //cout << "Multiplication: " << elapsedTime << " ms.\n";
 }
@@ -710,6 +746,11 @@ void GPUMuller::read_C( int offset, // This is the offset for both the GPU
         cout << "significand read fail" << endl;
         exit(err_num);
     }
+    #ifdef OCL_VERBOSE
+    timeval t1, t2;
+    clFinish(queue);
+    gettimeofday(&t1, NULL);
+    #endif
     err_num = clEnqueueReadBuffer(  queue,
                                     d_Cs,
                                     CL_TRUE,
@@ -722,6 +763,12 @@ void GPUMuller::read_C( int offset, // This is the offset for both the GPU
                                     0,
                                     NULL,
                                     NULL);
+    #ifdef OCL_VERBOSE
+    clFinish(queue);
+    gettimeofday(&t2, NULL);
+    totalReadTime += (t2.tv_sec -t1.tv_sec) * 1000.0;
+    totalReadTime += (t2.tv_usec - t1.tv_usec) / 1000.0;
+    #endif
     if (err_num != CL_SUCCESS)
     {
         cout << "exponent read fail" << endl;
@@ -966,6 +1013,11 @@ void GPUMuller::test()
 
 GPUMuller::~GPUMuller()
 {
+    #ifdef OCL_VERBOSE
+    printf("Total multiplication time: %g\n", totalMulTime);
+    printf("Total read time: %g\n", totalReadTime);
+    printf("Total write time: %g\n", totalWriteTime);
+    #endif
     // cleanup
     /*
     err_num |= clReleaseMemObject(d_A);

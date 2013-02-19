@@ -293,8 +293,11 @@ _Parameter _TheTree::OCLLikelihoodEvaluator(_SimpleList& updateNodes,
                                             //_OCLEvaluator& OCLEval)
 {
 
+    #ifdef OCL_VERBOSE
+    printf("Launching a tree in OpenCL...\n");
+    #endif
+    // XXX why is taggedInternals the whole list?
     _SimpleList taggedInternals (flatNodes.lLength, 0, 0);
-    //printf("Launching a tree in OpenCL...\n");
     return ((_Parameter) OCLEval.eval_likelihood(   updateNodes,
                                                     flatParents,
                                                     flatNodes,

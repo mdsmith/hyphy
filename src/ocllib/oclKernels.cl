@@ -1,3 +1,4 @@
+STRINGIFY(
 #define BLOCK_SIZE 16
 #define SCALAR 10
 #define SCAL_THRESH 1e-10
@@ -275,4 +276,4 @@ __kernel void setVals(
 
 
 
-
+)

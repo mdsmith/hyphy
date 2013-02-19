@@ -77,6 +77,7 @@ void    DecideOnDivideBy (_LikelihoodFunction*);
 #ifdef MDSOCL
 	//_OCLEvaluator *OCLEval;
 	OCLlikeEval *OCLEval;
+    #define OCL_VERBOSE
 #endif
 
 #ifdef __MP__
@@ -3659,6 +3660,9 @@ void            _LikelihoodFunction::SetupLFCaches              (void)
     matricesToExponentiate.Clear();
 
 #ifdef MDSOCL
+    #ifdef OCL_VERBOSE
+        printf("Creating OCLlikeEval objects\n");
+    #endif
 	//OCLEval = new _OCLEvaluator[theTrees.lLength]();
 	OCLEval = new OCLlikeEval[theTrees.lLength]();
 #endif
@@ -3756,6 +3760,9 @@ void            _LikelihoodFunction::SetupLFCaches              (void)
         delete [] translationCache;
 
 #ifdef MDSOCL
+        #ifdef OCL_VERBOSE
+        printf("Initializing the OCLEval object\n");
+        #endif
 		OCLEval[i].init(patternCount, theFilter->GetDimension(), conditionalInternalNodeLikelihoodCaches[i]);
 #endif
     }
@@ -7516,6 +7523,9 @@ void    _LikelihoodFunction::Cleanup (void)
     DeleteCaches();
 
 #ifdef MDSOCL
+    #ifdef OCL_VERBOSE
+    printf("Destroying the OCLEval object\n");
+    #endif
 	for (int i = 0; i < theTrees.lLength; i++)
 	{
 		//OCLEval[i].~_OCLEvaluator();
