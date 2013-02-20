@@ -233,7 +233,6 @@ void GPUMuller::setup_context()
 
     // prog setup
     const char* source = Kernels();
-    cout << source << endl;
     cl_program prog = clCreateProgramWithSource(ctx, 1, &source, NULL, &err_num);
     if (err_num != CL_SUCCESS)
     {
