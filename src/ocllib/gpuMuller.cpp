@@ -189,7 +189,7 @@ void GPUMuller::setup_context()
     err_num = clGetDeviceIDs(plat, CL_DEVICE_TYPE_GPU, 0, NULL, &dev_count);
     devices = (cl_device_id *)malloc(dev_count * sizeof(cl_device_id));
     err_num = clGetDeviceIDs(plat, CL_DEVICE_TYPE_GPU, dev_count, devices, NULL);
-    device = devices[0];
+    device = devices[0]; // XXX set back down to 0
     if (err_num != CL_SUCCESS)
     {
         cout << "Dev fail" << endl;
@@ -233,6 +233,7 @@ void GPUMuller::setup_context()
 
     // prog setup
     const char* source = Kernels();
+    cout << source << endl;
     cl_program prog = clCreateProgramWithSource(ctx, 1, &source, NULL, &err_num);
     if (err_num != CL_SUCCESS)
     {
@@ -244,7 +245,19 @@ void GPUMuller::setup_context()
     err_num = clBuildProgram(prog, 1, &device, "-cl-fast-relaxed-math -cl-mad-enable", NULL, NULL);
     if (err_num != CL_SUCCESS)
     {
-        cout << "build fail" << endl;
+        cout << "build fail " << err_num << endl;
+        // Determine the size of the log
+        size_t log_size;
+        clGetProgramBuildInfo(prog, device, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
+
+        // Allocate memory for the log
+        char *log = (char *) malloc(log_size);
+
+        // Get the log
+        clGetProgramBuildInfo(prog, device, CL_PROGRAM_BUILD_LOG, log_size, log, NULL);
+
+        // Print the log
+        printf("%s\n", log);
         exit(err_num);
     }
 
@@ -581,7 +594,9 @@ void GPUMuller::multiply()
     cl_int temp_b_col_offset = B.get_col_offset();
     cl_int temp_c_row_offset = C.get_row_offset();
     cl_int temp_c_col_offset = C.get_col_offset();
-    cl_bool temp_overwrite = overwrite;
+    cl_int temp_overwrite = 0;
+    if (overwrite)
+        temp_overwrite = 1;
 
 /*
     cout    << "AH, AW, ARO, ACO: "
@@ -651,7 +666,7 @@ void GPUMuller::multiply()
                                 (void *) &temp_c_col_offset);
     err_num |= clSetKernelArg(  kernel,
                                 17,
-                                sizeof(cl_bool),
+                                sizeof(cl_int),
                                 (void *) &temp_overwrite);
 
     if (err_num != CL_SUCCESS)

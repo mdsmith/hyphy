@@ -3,6 +3,7 @@
 #include <cstring>
 #include <math.h>
 #include <iostream>
+#include <stdio.h>
 //#define WOLFRAM
 using namespace std;
 

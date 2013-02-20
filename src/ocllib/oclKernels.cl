@@ -24,7 +24,7 @@ __kernel void matMul(
                 int b_col_offset,
                 int c_row_offset,
                 int c_col_offset,
-                bool overwrite)
+                int overwrite)
 {
     int a_offset = a_row_offset * a_round_row_len + a_col_offset;
     int b_offset = b_row_offset * c_round_row_len + b_col_offset;
@@ -205,7 +205,7 @@ __kernel void matMul(
     if (in_frame)
     {
         //C[c_offset + wB*gy + gx] = get_global_size(1); // XXX temp
-        if (overwrite)
+        if (overwrite == 1)
         {
             C[c_offset + wB*gy + gx] = Csub_sig;
             Cscalings[c_offset + wB * gy + gx] = Csub_exp;
@@ -220,7 +220,6 @@ __kernel void matMul(
             //Cscalings[c_offset + wB * gy + gx] += Csub_exp;
             int old_exp = Cscalings[c_offset + wB * gy + gx];
             int new_exp = Csub_exp + old_exp;
-
             /*
             while (new_sig < SCAL_THRESH && new_sig > 0)
             {
@@ -246,8 +245,6 @@ __kernel void matMul(
             C[c_offset + wB*gy + gx] = new_sig;
             Cscalings[c_offset + wB * gy + gx] = new_exp;
         }
-        /*
-        */
         //Cscalings[c_offset + wB * gy + gx] = Csub_exp;
     }
 };
