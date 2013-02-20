@@ -18,9 +18,12 @@
 
 #define STRINGIFY(src) #src
 
+#define kernel_header "#define BLOCK_SIZE 16\n#define SCALAR 10\n#define SCAL_THRESH 1e-10\n#define MAX(a, b) (((a) > (b)) ? (a) : (b))\n#define MIN(a, b) (((a) < (b)) ? (a) : (b))\n"
+
 inline const char* Kernels()
 {
     static const char* kernels =
+        kernel_header
         #include "oclKernels.cl"
         ;
     return kernels;
@@ -229,11 +232,7 @@ void GPUMuller::setup_context()
     }
 
     // prog setup
-    // XXX obviously this is a problem
     const char* source = Kernels();
-    cout << source << endl;
-    //const char* source =
-    //load_program_source("/Users/martinsmith/Software/hyphy/src/ocllib/oclKernels.cl");
     cl_program prog = clCreateProgramWithSource(ctx, 1, &source, NULL, &err_num);
     if (err_num != CL_SUCCESS)
     {

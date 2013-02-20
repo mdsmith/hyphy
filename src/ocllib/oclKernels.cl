@@ -1,9 +1,10 @@
 STRINGIFY(
-#define BLOCK_SIZE 16
-#define SCALAR 10
-#define SCAL_THRESH 1e-10
-#define MAX(a, b) (((a) > (b)) ? (a) : (b))
-#define MIN(a, b) (((a) < (b)) ? (a) : (b))
+// Find these in gpuMuller.cpp. They don't work here with STRINGIFY
+//#define BLOCK_SIZE 16
+//#define SCALAR 10
+//#define SCAL_THRESH 1e-10
+//#define MAX(a, b) (((a) > (b)) ? (a) : (b))
+//#define MIN(a, b) (((a) < (b)) ? (a) : (b))
 
 __kernel void matMul(
                 __global float* A,
@@ -249,7 +250,7 @@ __kernel void matMul(
         */
         //Cscalings[c_offset + wB * gy + gx] = Csub_exp;
     }
-}
+};
 
 __kernel void setVals(
                         __global float* m,
@@ -271,9 +272,9 @@ __kernel void setVals(
         m[(gy + row_offset) * row_len_round + (gx + col_offset)] = sig_val;
         scalings[gx + col_offset] = exp_val;
     }
-}
+};
 
 
 
 
-)
+);
