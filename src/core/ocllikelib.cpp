@@ -227,6 +227,9 @@ double OCLlikeEval::evaluate()
     int updated_block = updateNodes.lLength * alphabetDimension;
     int BNR = (flatParents.lLength - 1) * alphabetDimension;
     int BNC = alphabetDimension;
+    #ifdef OCL_VERBOSE
+    cout << "The one B update specified in the adapter lib\n" << endl;
+    #endif
     gm.update_B(modelCache, 0, 0, updated_block, BNC, BNR, BNC);
 
     int ARO, ACO, AH, UD, BW, BRO, BCO, CRO, CCO;

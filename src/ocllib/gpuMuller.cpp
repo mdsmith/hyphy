@@ -35,7 +35,7 @@ using namespace std;
 #define PAD_SIZE 64
 #define SCALAR 10
 #define SCAL_THRESH 1e-10
-#define OCL_VERBOSE
+#define OCL_VERBOSE 1
 
 bool evaluated;
 bool cleanBuff;
@@ -488,13 +488,16 @@ void GPUMuller::check_buffers()
     if (!cleanBuff)
         update_buffers();
 
-    #ifdef OCL_VERBOSE
+    #if (OCL_VERBOSE > 0)
     timeval t1, t2;
     clFinish(queue);
     gettimeofday(&t1, NULL);
     #endif
     if (a_dirt)
     {
+        #if (OCL_VERBOSE > 1)
+        cout << "Writing A" << endl;
+        #endif
         err_num = clEnqueueWriteBuffer( queue,
                                         d_A,
                                         CL_FALSE,
@@ -517,9 +520,13 @@ void GPUMuller::check_buffers()
                                         NULL,
                                         NULL
                                         );
+        a_dirt = false;
     }
     if (b_dirt)
     {
+        #if (OCL_VERBOSE > 1)
+        cout << "Writing B" << endl;
+        #endif
         err_num |= clEnqueueWriteBuffer( queue,
                                         d_B,
                                         CL_FALSE,
@@ -542,9 +549,13 @@ void GPUMuller::check_buffers()
                                         NULL,
                                         NULL
                                         );
+        b_dirt = false;
     }
     if (c_dirt)
     {
+        #if (OCL_VERBOSE > 1)
+        cout << "Writing C" << endl;
+        #endif
         err_num |= clEnqueueWriteBuffer( queue,
                                         d_C,
                                         CL_FALSE,
@@ -565,13 +576,14 @@ void GPUMuller::check_buffers()
                                         NULL,
                                         NULL
                                         );
+        c_dirt = false;
     }
     if (err_num != CL_SUCCESS)
     {
         cout << "Error rewritting buffers" << endl;
         exit(err_num);
     }
-    #ifdef OCL_VERBOSE
+    #if (OCL_VERBOSE > 0)
     clFinish(queue);
     gettimeofday(&t2, NULL);
     totalWriteTime += (t2.tv_sec -t1.tv_sec) * 1000.0;
@@ -677,7 +689,7 @@ void GPUMuller::multiply()
     // launch kernel
     timeval t1, t2;
     double elapsedTime;
-    #ifdef OCL_VERBOSE
+    #if (OCL_VERBOSE > 0)
     clFinish(queue);
     #endif
     gettimeofday(&t1, NULL);
@@ -686,6 +698,9 @@ void GPUMuller::multiply()
     //cout << ", " << global_work_size[1] << endl;
     //cout << "Local work size: " << local_work_size[0];
     //cout << ", " << local_work_size[1] << endl;
+    #if (OCL_VERBOSE > 1)
+    cout << "Multiplying..." << endl;
+    #endif
     err_num = clEnqueueNDRangeKernel(   queue,
                                         kernel,
                                         2,
@@ -722,6 +737,14 @@ void GPUMuller::read_C( int offset, // This is the offset for both the GPU
                         int* scalings_ptr)  // The host exponent buffer ptr
 {
     // get results
+    #if (OCL_VERBOSE > 1)
+    cout << "Reading C" << endl;
+    #endif
+    #if (OCL_VERBOSE > 0)
+    timeval t1, t2;
+    clFinish(queue);
+    gettimeofday(&t1, NULL);
+    #endif
     err_num = clEnqueueReadBuffer(  queue,
                                     d_C,
                                     CL_TRUE,
@@ -759,11 +782,6 @@ void GPUMuller::read_C( int offset, // This is the offset for both the GPU
         cout << "significand read fail" << endl;
         exit(err_num);
     }
-    #ifdef OCL_VERBOSE
-    timeval t1, t2;
-    clFinish(queue);
-    gettimeofday(&t1, NULL);
-    #endif
     err_num = clEnqueueReadBuffer(  queue,
                                     d_Cs,
                                     CL_TRUE,
@@ -776,7 +794,7 @@ void GPUMuller::read_C( int offset, // This is the offset for both the GPU
                                     0,
                                     NULL,
                                     NULL);
-    #ifdef OCL_VERBOSE
+    #if (OCL_VERBOSE > 0)
     clFinish(queue);
     gettimeofday(&t2, NULL);
     totalReadTime += (t2.tv_sec -t1.tv_sec) * 1000.0;
@@ -1026,7 +1044,7 @@ void GPUMuller::test()
 
 GPUMuller::~GPUMuller()
 {
-    #ifdef OCL_VERBOSE
+    #if (OCL_VERBOSE > 0)
     printf("Total multiplication time: %g\n", totalMulTime);
     printf("Total read time: %g\n", totalReadTime);
     printf("Total write time: %g\n", totalWriteTime);

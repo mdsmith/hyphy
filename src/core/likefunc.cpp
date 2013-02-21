@@ -7523,14 +7523,16 @@ void    _LikelihoodFunction::Cleanup (void)
     DeleteCaches();
 
 #ifdef MDSOCL
-    #ifdef OCL_VERBOSE
-    printf("Destroying the OCLEval object\n");
-    #endif
+    //#ifdef OCL_VERBOSE
+    //printf("Destroying the OCLEval object\n");
+    //#endif
+    /*
 	for (int i = 0; i < theTrees.lLength; i++)
 	{
 		//OCLEval[i].~_OCLEvaluator();
 		OCLEval[i].~OCLlikeEval();
 	}
+    */
 	delete [] OCLEval;
 #endif
 }
