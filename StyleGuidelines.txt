@@ -1,0 +1,20 @@
+Core Sourcecode Style Guidelines
+================================
+
+Class names:
+  - underscore, then upper camel case: _MmmMmmm
+
+Method names:
+  - lower case: mmmMmmm
+  - Use in class definition should be prefixed by this->, to differentiate
+    from global/included methods.
+
+Object names:
+  - snake case: mm_mmm
+
+Variable names:
+  - snake case: mm_mmm
+
+Brackets:
+  - Inline: {
+    }

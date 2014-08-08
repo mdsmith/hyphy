@@ -41,8 +41,8 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define _HYTRANSLATIONTABLE_
 //#pragma once
 
-#include "list.h"
 #include "hy_strings.h"
+#include "hy_list.h"
 
 #define HY_TRANSLATION_TABLE_NONSTANDARD 0x000
 #define HY_TRANSLATION_TABLE_STANDARD_BINARY 0x001
@@ -75,8 +75,8 @@ public:
       delete [] checkTable;
     }
   }
-  virtual BaseRef makeDynamic(void);
-  virtual void Duplicate(BaseRef);
+  virtual BaseRef makeDynamic(void) const;
+  virtual void Duplicate(BaseRefConst);
 
   const unsigned long TokenCode(const char) const;
   char CodeToLetter(long *) const;
@@ -117,7 +117,7 @@ private:
 
   _String tokensAdded, baseSet;
 
-  _SimpleList translationsAdded;
+  _hyList<long> translationsAdded;
   unsigned char *checkTable;
   // if null - then assume default translation table;
 };
