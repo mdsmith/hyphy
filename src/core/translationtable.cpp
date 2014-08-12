@@ -98,9 +98,9 @@ const unsigned long _TranslationTable::TokenCode(const char token) const {
 }
 
 //______________________________________________________________________________
+// assumes a non-unique translation of split
+// for unique - use ConvertCodeToLetters
 char _TranslationTable::CodeToLetter(long *split) const {
-  // assumes a non-unique translation of split
-  // for unique - use ConvertCodeToLetters
   const unsigned long trsl = bitStringToLong(split, LengthOfAlphabet());
 
   if (baseSet.s_length == 0) {
@@ -168,7 +168,6 @@ bool _TranslationTable::TokenCode(const char token, long *receptacle,
   // SLKP 20071002 should really be a 256 char lookup table
 
   if (f != HY_NOT_FOUND) {
-    //SplitTokenCode(translationsAdded.lData[f], receptacle);
     SplitTokenCode(translationsAdded(f), receptacle);
     return true;
   }

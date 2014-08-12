@@ -58,7 +58,15 @@ class _TranslationTable : public BaseObj {
 
 public:
 
+  /**
+   * Empty constructor. Sets a few defaults
+   */
   _TranslationTable(void);
+
+  /**
+   * Constructor from alphabet.
+   * @param alphabet Provide the alphabet for this translation table.
+   */
   _TranslationTable(const _String &);
   /* 20100618: SLKP
 
@@ -69,57 +77,194 @@ public:
               DNA/RNA/Protein or Binary
 
      */
+
+  /**
+   * Constructor from existing table.
+   * @param t Provide a translation table to be duplicated for this
+   * translation table.
+   */
   _TranslationTable(_TranslationTable &);
   virtual ~_TranslationTable(void) {
     if (checkTable) {
       delete [] checkTable;
     }
   }
+
+  /**
+   * Make a dynamic version of this object
+   */
   virtual BaseRef makeDynamic(void) const;
+
+  /**
+   * Make this translation table a duplicate of another translation table
+   */
   virtual void Duplicate(BaseRefConst);
 
+  /**
+   * Return a translated version of a token
+   * @param token the token provided
+   * @return the code version of the token
+   */
   const unsigned long TokenCode(const char) const;
+
+  /**
+   * Return a translated version of a token
+   * @param token the token provided
+   * @param receptacle the code recepticle to be filled.
+   * @param gapToOnes replace gap characters with all ones (ambiguity)
+   * @return t/f was this token part of an added set or a custom base set?
+   */
+  bool TokenCode(const char, long *, const bool = true) const;
+
+  /**
+   * Return a translated version of a code
+   * @param split the code provided
+   * Assumes a non-unique translation of split
+   * for unique - use ConvertCodeToLetters
+   */
   char CodeToLetter(long *) const;
 
+  /**
+   * Replace the current base alphabet with a given one
+   * @param code the given alphabet
+   */
   void AddBaseSet(const _String &);
-  bool TokenCode(const char, long *, const bool = true) const;
+
+  /**
+   * Split a long code into a bit string, store result in receptacle
+   * @param code the code to split
+   * @param receptacle for returning the split code
+   */
   void SplitTokenCode(long, long *) const;
 
+  /**
+   * Add a new token to the alphabet
+   * @param token the token to add to the alphabet
+   * @param code the code that token maps to, check to prevent base set
+   * redefinition
+   */
   void AddTokenCode(const char, _String &);
+
+  /**
+   * Prepare a ledger for checking the translation table
+   */
   void PrepareForChecks(void);
+
+  /**
+   * Check for table verification ledger, return content of ledger for that
+   * character
+   * @param c the character to check
+   * @return the value of the verification ledger, t/f.
+   */
   const bool IsCharLegal(const char);
+
+  /**
+   * Get character that maps to all ones, if one exists
+   * @return return the all 1 character if exists, '?' otherwise
+   */
   const char GetSkipChar(void) const;
+
+  /**
+   * Get character that maps to all zeroes, if one exists
+   * @return return the all 0 character if exists, '-' otherwise
+   */
   const char GetGapChar(void) const;
+
+  /**
+   * Convert a code into a string of letters
+   * @param code the given code
+   * @param base the length of the return string, as a define of one of the
+   * basic types (nuc vs aa)
+   * @return the string of letters encoded by code
+   */
   _String ConvertCodeToLetters(long, const char);
+
+  /**
+   * Get the length of the alphabet used in translation
+   * @return the length of the alphabet
+   */
   const unsigned long LengthOfAlphabet(void) const;
+
+  /**
+   * Get the length of the base alphabet
+   * @return the length of the base alphabet
+   */
   inline const unsigned long Dimension(void) const { return baseLength; }
+
+  /**
+   * Get the base alphabet
+   * @return the base alphabet
+   */
   const _String *RetrieveCharacters(void) const;
+
+  /**
+   * Get the tokens added to the alphabet
+   * @return the tokens added to the alphabet
+   */
   const _String &RetrieveAddedTokens(void) const { return tokensAdded; }
 
+  /**
+   * Reset the translation table and all objects and variables therein
+   */
   void Clear(void);
 
+  /**
+   * Change the base alphabet to a different data type (nucleotide vs amino
+   * acid)
+   * @param type a constant representing the target type
+   */
   void SetStandardType(const unsigned char);
+
+  /**
+   * Check that the type (nuc vs aa) of the provided pattern is the same as
+   * this translation table
+   * @param pattern the letters to be typed
+   * @return whether or not the pattern is the same type as the translation
+   * table, t/f
+   */
   bool CheckType(const unsigned char) const;
 
+  /**
+   * Check the type (nuc vs aa) of the translation table
+   * @return the type of the translation as the value of a constant (define)
+   */
   const unsigned char DetectType(void) const;
 
+  /**
+   * Merge the given and this TransTable, if possible, return result
+   * @param the translation table to be merged with this table
+   * @return A translation table that contains the product of merging the two
+   * tables
+   */
   _TranslationTable *MergeTables(_TranslationTable *);
 
+  /**
+   * Get the characters in the base alphabet of length size as a string
+   * @param The length of the alphabet to be matched and returned
+   * @return A string containing ever character in the default alphabet of
+   * size (given) size
+   */
   static const _String *GetDefaultAlphabet(const long);
 
 private:
 
+  /**
+   * Check whether the given string meets the requirements of an alphabet
+   * @param try_me the string to try as an alphabet
+   * @return t/f does the provided alphabet meet the requirements
+   */
   static bool CheckValidAlphabet(const _String &);
 
-  unsigned long baseLength;
   // number of "fundamental" tokens
   //(4 for nucl, ACGT; 20 for amino acids)
+  unsigned long baseLength;
 
   _String tokensAdded, baseSet;
 
   _hyList<long> translationsAdded;
-  unsigned char *checkTable;
+
   // if null - then assume default translation table;
+  unsigned char *checkTable;
 };
 
 extern _TranslationTable defaultTranslationTable;
