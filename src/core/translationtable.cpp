@@ -47,39 +47,42 @@
 #include "site.h"
 #include "errorfns.h"
 
-_TranslationTable defaultTranslationTable;
+_TranslationTable default_translation_table;
 
-_String aminoAcidOneCharCodes("ACDEFGHIKLMNPQRSTVWY"), dnaOneCharCodes("ACGT"),
-    rnaOneCharCodes("ACGU"), binaryOneCharCodes("01");
+_String amino_acid_one_char_codes("ACDEFGHIKLMNPQRSTVWY"), dna_one_char_codes("ACGT"),
+    rna_one_char_codes("ACGU"), binary_one_char_codes("01");
 
 //______________________________________________________________________________
 _TranslationTable::_TranslationTable(void) {
-  baseLength = 4;
-  checkTable = NULL;
+  base_length = 4;
+  check_table = NULL;
 }
 
 //______________________________________________________________________________
-_TranslationTable::_TranslationTable(_TranslationTable &t) { Duplicate(&t); }
+_TranslationTable::_TranslationTable(_TranslationTable &t) {
+  this->Duplicate(&t);
+}
 
 //______________________________________________________________________________
 _TranslationTable::_TranslationTable(const _String &alphabet) {
-  baseLength = alphabet.s_length;
-  checkTable = NULL;
-  if (!(alphabet.Equal(&dnaOneCharCodes) || alphabet.Equal(&rnaOneCharCodes) ||
-        alphabet.Equal(&binaryOneCharCodes) ||
-        alphabet.Equal(&aminoAcidOneCharCodes))) {
-    AddBaseSet(alphabet);
+  base_length = alphabet.s_length;
+  check_table = NULL;
+  if (!(alphabet.Equal(&dna_one_char_codes) ||
+        alphabet.Equal(&rna_one_char_codes) ||
+        alphabet.Equal(&binary_one_char_codes) ||
+        alphabet.Equal(&amino_acid_one_char_codes))) {
+    this->addBaseSet(alphabet);
   }
 }
 
 //______________________________________________________________________________
 void _TranslationTable::Duplicate(BaseRefConst obj) {
   _TranslationTable *tt = (_TranslationTable *)obj;
-  baseLength = tt->baseLength;
-  checkTable = nil;
-  tokensAdded = tt->tokensAdded;
-  baseSet = tt->baseSet;
-  translationsAdded.Duplicate(&tt->translationsAdded);
+  base_length = tt->base_length;
+  check_table = nil;
+  tokens_added = tt->tokens_added;
+  base_set = tt->base_set;
+  translations_added.Duplicate(&tt->translations_added);
 }
 
 //______________________________________________________________________________
@@ -90,22 +93,23 @@ BaseRef _TranslationTable::makeDynamic(void) const{
 }
 
 //______________________________________________________________________________
-const unsigned long _TranslationTable::TokenCode(const char token) const {
+const unsigned long _TranslationTable::tokenCode(const char token) const {
   // standard translations
   long receptacle[HY_WIDTH_OF_LONG];
-  TokenCode(token, receptacle);
-  return bitStringToLong(receptacle, baseLength);
+  this->tokenCode(token, receptacle);
+  return bitStringToLong(receptacle, base_length);
 }
 
 //______________________________________________________________________________
 // assumes a non-unique translation of split
-// for unique - use ConvertCodeToLetters
-char _TranslationTable::CodeToLetter(long *split) const {
-  const unsigned long trsl = bitStringToLong(split, LengthOfAlphabet());
+// for unique - use convertCodeToLetters
+char _TranslationTable::codeToLetter(long *split) const {
+  const unsigned long trsl = bitStringToLong( split,
+                                              this->lengthOfAlphabet());
 
-  if (baseSet.s_length == 0) {
+  if (base_set.s_length == 0) {
     // one of the standard alphabers
-    if (baseLength == 4) {
+    if (base_length == 4) {
       // nucleotides
       switch (trsl) {
       case 3:
@@ -127,7 +131,7 @@ char _TranslationTable::CodeToLetter(long *split) const {
       case 14:
         return 'B';
       }
-    } else if (baseLength == 20) {
+    } else if (base_length == 20) {
       // amino acids
       switch (trsl) {
       case 2052:
@@ -136,47 +140,47 @@ char _TranslationTable::CodeToLetter(long *split) const {
         return 'Z';
       }
     }
-  } else if (tokensAdded.s_length) {
-    long f = translationsAdded.Find(trsl);
+  } else if (tokens_added.s_length) {
+    long f = translations_added.Find(trsl);
     // linear search for (binary) translations
     if (f >= 0) {
-      return tokensAdded.s_data[f];
+      return tokens_added.s_data[f];
     }
   }
   return '?';
 }
 
 //______________________________________________________________________________
-void _TranslationTable::SplitTokenCode(const long code,
+void _TranslationTable::splitTokenCode(const long code,
                                        long *receptacle) const {
-  longToBitString(receptacle, code, baseLength);
+  longToBitString(receptacle, code, base_length);
 }
 
 //______________________________________________________________________________
-const unsigned long _TranslationTable::LengthOfAlphabet(void) const {
-  return baseSet.s_length ? baseSet.s_length : baseLength;
+const unsigned long _TranslationTable::lengthOfAlphabet(void) const {
+  return base_set.s_length ? base_set.s_length : base_length;
 }
 
 //______________________________________________________________________________
 
-bool _TranslationTable::TokenCode(const char token, long *receptacle,
-                                  const bool gapToOnes) const {
+bool _TranslationTable::tokenCode(const char token, long *receptacle,
+                                  const bool gap_to_ones) const {
 
-  long f = tokensAdded.s_length ? tokensAdded.Find(token) : HY_NOT_FOUND;
+  long f = tokens_added.s_length ? tokens_added.Find(token) : HY_NOT_FOUND;
   // check for custom translations
   // OPTIMIZE FLAG linear search:
   // SLKP 20071002 should really be a 256 char lookup table
 
   if (f != HY_NOT_FOUND) {
-    SplitTokenCode(translationsAdded(f), receptacle);
+    this->splitTokenCode(translations_added(f), receptacle);
     return true;
   }
 
-  if (baseSet.s_length) {
+  if (base_set.s_length) {
     // custom base alphabet
 
-    memset(receptacle, 0, baseLength * sizeof(long));
-    f = baseSet.Find(token);
+    memset(receptacle, 0, base_length * sizeof(long));
+    f = base_set.Find(token);
     // OPTIMIZE FLAG linear search:
     // SLKP 20071002 should really be a 256 char lookup table
 
@@ -187,7 +191,7 @@ bool _TranslationTable::TokenCode(const char token, long *receptacle,
     return true;
   }
 
-  if (baseLength == 4) {
+  if (base_length == 4) {
     // standard nucleotide
     memset(receptacle, 0, 4L * sizeof(long));
 
@@ -275,7 +279,7 @@ bool _TranslationTable::TokenCode(const char token, long *receptacle,
       break;
 
     case '-':
-      if (gapToOnes) {
+      if (gap_to_ones) {
         receptacle[1] = 1;
         receptacle[2] = 1;
         receptacle[3] = 1;
@@ -284,7 +288,7 @@ bool _TranslationTable::TokenCode(const char token, long *receptacle,
       }
     }
   } else {
-    if (baseLength == 20) {
+    if (base_length == 20) {
       memset(receptacle, 0, 20L * sizeof(long));
 
       switch (token) {
@@ -387,7 +391,7 @@ bool _TranslationTable::TokenCode(const char token, long *receptacle,
         }
       } break;
       case '-': {
-        if (gapToOnes)
+        if (gap_to_ones)
           for (int j = 0; j < 20; j++) {
             receptacle[j] = 1;
           }
@@ -414,7 +418,7 @@ bool _TranslationTable::TokenCode(const char token, long *receptacle,
         receptacle[1] = 1;
       } break;
       case '-': {
-        if (gapToOnes) {
+        if (gap_to_ones) {
           receptacle[0] = 1;
           receptacle[1] = 1;
         }
@@ -428,65 +432,66 @@ bool _TranslationTable::TokenCode(const char token, long *receptacle,
 }
 
 //______________________________________________________________________________
-void _TranslationTable::PrepareForChecks(void) {
-  if (checkTable == NULL) {
-    checkTable = new unsigned char [256];
+void _TranslationTable::prepareForChecks(void) {
+  if (check_table == NULL) {
+    check_table = new unsigned char [256];
   }
 
-  memset(checkTable, 0, 256);
+  memset(check_table, 0, 256);
 
   _String checkSymbols;
 
-  if (baseSet.s_length) {
-    checkSymbols = baseSet & tokensAdded;
-  } else if (baseLength == 2) {
-    checkSymbols = _String("01*?-.") & tokensAdded;
+  if (base_set.s_length) {
+    checkSymbols = base_set & tokens_added;
+  } else if (base_length == 2) {
+    checkSymbols = _String("01*?-.") & tokens_added;
   } else {
-    checkSymbols = _String("ABCDEFGHIJKLMNOPQRSTUVWXYZ*?-.") & tokensAdded;
+    checkSymbols = _String("ABCDEFGHIJKLMNOPQRSTUVWXYZ*?-.") & tokens_added;
   }
 
   for (unsigned long i = 0; i < checkSymbols.s_length; i++) {
-    checkTable[checkSymbols.getChar(i)] = 1;
+    check_table[checkSymbols.getChar(i)] = 1;
   }
 }
 
 //______________________________________________________________________________
-const bool _TranslationTable::IsCharLegal(const char c) {
-  if (!checkTable) {
-    PrepareForChecks();
+const bool _TranslationTable::isCharLegal(const char c) {
+  if (!check_table) {
+    this->prepareForChecks();
   }
-  return checkTable[c];
+  return check_table[c];
 }
 
 //______________________________________________________________________________
-void _TranslationTable::AddTokenCode(const char token, _String &code) {
+void _TranslationTable::addTokenCode(const char token, _String &code) {
   long f, newCode = 0L;
 
   bool reset_baseset = false;
 
-  if (baseSet.s_length == 0) {
-    // fill in baseSet for standard alphabets
-    if (baseLength == 4) {
-      baseSet = dnaOneCharCodes;
-    } else if (baseLength == 20) {
-      baseSet = aminoAcidOneCharCodes;
+  if (base_set.s_length == 0) {
+    // fill in base_set for standard alphabets
+    if (base_length == 4) {
+      base_set = dna_one_char_codes;
+    } else if (base_length == 20) {
+      base_set = amino_acid_one_char_codes;
     } else {
-      baseSet = binaryOneCharCodes;
+      base_set = binary_one_char_codes;
     }
     reset_baseset = true;
   }
 
-  if (baseSet.s_length) {
+  if (base_set.s_length) {
     long shifter = 1;
-    for (unsigned long j = 0; j < baseSet.s_length; j++, shifter <<= 1)
-      if (code.Find(baseSet.s_data[j]) != HY_NOT_FOUND) {
+    for (unsigned long j = 0; j < base_set.s_length; j++, shifter <<= 1) {
+      if (code.Find(base_set.s_data[j]) != HY_NOT_FOUND) {
         newCode += shifter;
       }
+    }
   }
 
-  f = baseSet.Find(token);
+  f = base_set.Find(token);
   if (reset_baseset) {
-    baseSet = empty;
+    base_set = empty;
   }
 
   if (f != HY_NOT_FOUND) {
@@ -495,26 +500,26 @@ void _TranslationTable::AddTokenCode(const char token, _String &code) {
   // see if the character being added is a base
   // character; those cannot be redefined
 
-  f = tokensAdded.Find(token, 0, -1);
+  f = tokens_added.Find(token, 0, -1);
   // new definition or redefinition?
 
   if (f == HY_NOT_FOUND) { // new
-    tokensAdded = tokensAdded & token;
-    translationsAdded << 0L;
-    f = tokensAdded.s_length - 1L;
+    tokens_added = tokens_added & token;
+    translations_added << 0L;
+    f = tokens_added.s_length - 1L;
   }
 
-  //translationsAdded.lData[f] = newCode;
-  translationsAdded[f] = newCode;
+  //translations_added.lData[f] = newCode;
+  translations_added[f] = newCode;
 }
 
 //______________________________________________________________________________
-void _TranslationTable::AddBaseSet(const _String &code) {
-  baseSet = code;
-  baseSet.StripQuotes();
-  if (CheckValidAlphabet(code)) {
-    baseLength = baseSet.s_length;
-    if (baseLength > HY_WIDTH_OF_LONG) {
+void _TranslationTable::addBaseSet(const _String &code) {
+  base_set = code;
+  base_set.StripQuotes();
+  if (this->checkValidAlphabet(code)) {
+    base_length = base_set.s_length;
+    if (base_length > HY_WIDTH_OF_LONG) {
       // longer than the bit size of 'long'
       // can't handle those
       warnError(_String("Alphabets with more than ") & HY_WIDTH_OF_LONG &
@@ -524,8 +529,8 @@ void _TranslationTable::AddBaseSet(const _String &code) {
 }
 
 //______________________________________________________________________________
-const char _TranslationTable::GetSkipChar(void) const {
-  if (DetectType() != HY_TRANSLATION_TABLE_ANY_STANDARD) {
+const char _TranslationTable::getSkipChar(void) const {
+  if (this->detectType() != HY_TRANSLATION_TABLE_ANY_STANDARD) {
     return '?'; // this is the default
   }
 
@@ -534,62 +539,62 @@ const char _TranslationTable::GetSkipChar(void) const {
 
   long all = 0, shifter = 1;
 
-  unsigned long ul = LengthOfAlphabet();
+  unsigned long ul = this->lengthOfAlphabet();
 
   for (unsigned long f = 0; f < ul; f++, shifter <<= 1) {
     all |= shifter;
   }
 
-  if ((all = translationsAdded.Find(all)) == HY_NOT_FOUND) {
+  if ((all = translations_added.Find(all)) == HY_NOT_FOUND) {
     return '?';
   } else {
-    return tokensAdded.getChar(all);
+    return tokens_added.getChar(all);
   }
 }
 
 //______________________________________________________________________________
-const char _TranslationTable::GetGapChar(void) const {
-  if (DetectType() != HY_TRANSLATION_TABLE_ANY_STANDARD) {
+const char _TranslationTable::getGapChar(void) const {
+  if (this->detectType() != HY_TRANSLATION_TABLE_ANY_STANDARD) {
     return '-'; // default gap character
   }
 
-  long f = translationsAdded.Find(0L);
+  long f = translations_added.Find(0L);
 
   if (f == HY_NOT_FOUND) {
     return 0;
   } else {
-    return tokensAdded.getChar(f);
+    return tokens_added.getChar(f);
   }
 }
 
 //______________________________________________________________________________
-_String _TranslationTable::ConvertCodeToLetters(long code, const char base) {
+_String _TranslationTable::convertCodeToLetters(long code, const char base) {
 
   _String res(base, false);
 
-  const unsigned long ul = LengthOfAlphabet();
+  const unsigned long ul = this->lengthOfAlphabet();
 
   if (code >= 0) {
     // OPTIMIZE FLAG; repeated memory allocation/deallocation
-    if (baseSet.s_length) {
+    if (base_set.s_length) {
       for (long k = 1; k <= base; k++, code /= ul) {
-        res.s_data[base - k] = baseSet.s_data[code % ul];
+        res.s_data[base - k] = base_set.s_data[code % ul];
       }
     } else {
       const _String *std_alphabet =
-          _TranslationTable::GetDefaultAlphabet(baseLength);
+          _TranslationTable::getDefaultAlphabet(base_length);
       if (std_alphabet) {
         for (long k = 1; k <= base; k++, code /= ul) {
           res.s_data[base - k] = std_alphabet->getChar(code % ul);
         }
       } else {
-        warnError("Internal error in _TranslationTable::ConvertCodeToLetters; "
+        warnError("Internal error in _TranslationTable::convertCodeToLetters; "
                   "unsupported standard alphabet");
       }
     }
 
   } else {
-    char c = GetGapChar();
+    char c = this->getGapChar();
     for (long k = 0; k < base; k++) {
       res.s_data[k] = c;
     }
@@ -598,42 +603,42 @@ _String _TranslationTable::ConvertCodeToLetters(long code, const char base) {
 }
 
 //______________________________________________________________________________
-void _TranslationTable::Clear(void) {
-  baseLength = 4;
-  baseSet = empty;
-  tokensAdded = empty;
-  translationsAdded.Clear();
-  if (checkTable) {
-    free(checkTable);
-    checkTable = nil;
+void _TranslationTable::clear(void) {
+  base_length = 4;
+  base_set = empty;
+  tokens_added = empty;
+  translations_added.Clear();
+  if (check_table) {
+    free(check_table);
+    check_table = nil;
   }
 }
 
 //______________________________________________________________________________
-void _TranslationTable::SetStandardType(unsigned const char type) {
-  Clear();
+void _TranslationTable::setStandardType(unsigned const char type) {
+  this->clear();
   switch (type) {
   case HY_TRANSLATION_TABLE_STANDARD_BINARY:
-    baseLength = 2;
+    base_length = 2;
     return;
   case HY_TRANSLATION_TABLE_STANDARD_PROTEIN:
-    baseLength = 20;
+    base_length = 20;
     return;
   }
-  baseLength = 4;
+  base_length = 4;
 }
 
 //______________________________________________________________________________
-bool _TranslationTable::CheckType(unsigned char pattern) const {
-  return DetectType() & pattern;
+bool _TranslationTable::checkType(unsigned char pattern) const {
+  return this->detectType() & pattern;
 }
 
 //______________________________________________________________________________
-const unsigned char _TranslationTable::DetectType(void) const {
-  //if (baseSet.s_length == 0UL && translationsAdded.lLength == 0UL &&
-  if (baseSet.s_length == 0UL && translationsAdded.countitems()== 0UL &&
-      tokensAdded.s_length == 0UL) {
-    switch (baseLength) {
+const unsigned char _TranslationTable::detectType(void) const {
+  //if (base_set.s_length == 0UL && translations_added.lLength == 0UL &&
+  if (base_set.s_length == 0UL && translations_added.countitems()== 0UL &&
+      tokens_added.s_length == 0UL) {
+    switch (base_length) {
     case 2:
       return HY_TRANSLATION_TABLE_STANDARD_BINARY;
     case 4:
@@ -648,31 +653,29 @@ const unsigned char _TranslationTable::DetectType(void) const {
 //______________________________________________________________________________
 // merge the translation tables if they are compatible, return the result,
 // otherwise return nil
-_TranslationTable *_TranslationTable::MergeTables(_TranslationTable *table2) {
+_TranslationTable *_TranslationTable::mergeTables(_TranslationTable *table2) {
 
-  const unsigned char my_type = DetectType();
+  const unsigned char my_type = this->detectType();
 
-  if (my_type != table2->DetectType()) {
+  if (my_type != table2->detectType()) {
     return nil;
   }
 
   if (my_type == HY_TRANSLATION_TABLE_NONSTANDARD &&
-      !baseSet.Equal(&table2->baseSet)) {
+      !base_set.Equal(&table2->base_set)) {
     return nil;
   }
 
   _TranslationTable *result = new _TranslationTable(*this);
 
-  if (table2->tokensAdded.s_length) {
-    for (unsigned long i = 0; i < table2->tokensAdded.s_length; i++) {
-      long f = tokensAdded.Find(table2->tokensAdded[i]);
+  if (table2->tokens_added.s_length) {
+    for (unsigned long i = 0; i < table2->tokens_added.s_length; i++) {
+      long f = tokens_added.Find(table2->tokens_added[i]);
       if (f == HY_NOT_FOUND) {
-        result->tokensAdded &&table2->tokensAdded[i];
-        result->translationsAdded << table2->translationsAdded[i];
-      //} else if (translationsAdded.lData[f] !=
-      } else if (translationsAdded(f) !=
-                 //table2->translationsAdded.lData[i]) {
-                 table2->translationsAdded(i)) {
+        result->tokens_added &&table2->tokens_added[i];
+        result->translations_added << table2->translations_added[i];
+      } else if (translations_added(f) !=
+                 table2->translations_added(i)) {
         DeleteObject(result);
         return nil;
       }
@@ -686,30 +689,30 @@ _TranslationTable *_TranslationTable::MergeTables(_TranslationTable *table2) {
 }
 
 //______________________________________________________________________________
-const _String *_TranslationTable::RetrieveCharacters(void) const {
-  if (baseSet.s_length) {
-    return &baseSet;
+const _String *_TranslationTable::retrieveCharacters(void) const {
+  if (base_set.s_length) {
+    return &base_set;
   }
 
-  const _String *res = GetDefaultAlphabet(Dimension());
+  const _String *res = this->getDefaultAlphabet(this->dimension());
   return res ? res : &empty;
 }
 
 //______________________________________________________________________________
-const _String *_TranslationTable::GetDefaultAlphabet(const long size) {
+const _String *_TranslationTable::getDefaultAlphabet(const long size) {
   switch (size) {
   case 2:
-    return &binaryOneCharCodes;
+    return &binary_one_char_codes;
   case 4:
-    return &dnaOneCharCodes;
+    return &dna_one_char_codes;
   case 20:
-    return &aminoAcidOneCharCodes;
+    return &amino_acid_one_char_codes;
   }
   return nil;
 }
 
 //______________________________________________________________________________
-bool _TranslationTable::CheckValidAlphabet(const _String &try_me) {
+bool _TranslationTable::checkValidAlphabet(const _String &try_me) {
   _String test(try_me);
   if (test.s_length > 1) {
     test.UpCase();
@@ -719,11 +722,11 @@ bool _TranslationTable::CheckValidAlphabet(const _String &try_me) {
       return true;
     }
     DeleteObject(sorted);
-    warnError("_TranslationTable::CheckValidAlphabet -- a sorted string with "
+    warnError("_TranslationTable::checkValidAlphabet -- a sorted string with "
               "no lower case letters is required");
 
   } else {
-    warnError("_TranslationTable::CheckValidAlphabet -- at least two "
+    warnError("_TranslationTable::checkValidAlphabet -- at least two "
               "characters required");
   }
   return false;

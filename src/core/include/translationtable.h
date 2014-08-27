@@ -85,8 +85,8 @@ public:
    */
   _TranslationTable(_TranslationTable &);
   virtual ~_TranslationTable(void) {
-    if (checkTable) {
-      delete [] checkTable;
+    if (check_table) {
+      delete [] check_table;
     }
   }
 
@@ -105,37 +105,37 @@ public:
    * @param token the token provided
    * @return the code version of the token
    */
-  const unsigned long TokenCode(const char) const;
+  const unsigned long tokenCode(const char) const;
 
   /**
    * Return a translated version of a token
    * @param token the token provided
    * @param receptacle the code recepticle to be filled.
-   * @param gapToOnes replace gap characters with all ones (ambiguity)
+   * @param gap_to_ones replace gap characters with all ones (ambiguity)
    * @return t/f was this token part of an added set or a custom base set?
    */
-  bool TokenCode(const char, long *, const bool = true) const;
+  bool tokenCode(const char, long *, const bool = true) const;
 
   /**
    * Return a translated version of a code
    * @param split the code provided
    * Assumes a non-unique translation of split
-   * for unique - use ConvertCodeToLetters
+   * for unique - use convertCodeToLetters
    */
-  char CodeToLetter(long *) const;
+  char codeToLetter(long *) const;
 
   /**
    * Replace the current base alphabet with a given one
    * @param code the given alphabet
    */
-  void AddBaseSet(const _String &);
+  void addBaseSet(const _String &);
 
   /**
    * Split a long code into a bit string, store result in receptacle
    * @param code the code to split
    * @param receptacle for returning the split code
    */
-  void SplitTokenCode(long, long *) const;
+  void splitTokenCode(long, long *) const;
 
   /**
    * Add a new token to the alphabet
@@ -143,12 +143,12 @@ public:
    * @param code the code that token maps to, check to prevent base set
    * redefinition
    */
-  void AddTokenCode(const char, _String &);
+  void addTokenCode(const char, _String &);
 
   /**
    * Prepare a ledger for checking the translation table
    */
-  void PrepareForChecks(void);
+  void prepareForChecks(void);
 
   /**
    * Check for table verification ledger, return content of ledger for that
@@ -156,19 +156,19 @@ public:
    * @param c the character to check
    * @return the value of the verification ledger, t/f.
    */
-  const bool IsCharLegal(const char);
+  const bool isCharLegal(const char);
 
   /**
    * Get character that maps to all ones, if one exists
    * @return return the all 1 character if exists, '?' otherwise
    */
-  const char GetSkipChar(void) const;
+  const char getSkipChar(void) const;
 
   /**
    * Get character that maps to all zeroes, if one exists
    * @return return the all 0 character if exists, '-' otherwise
    */
-  const char GetGapChar(void) const;
+  const char getGapChar(void) const;
 
   /**
    * Convert a code into a string of letters
@@ -177,43 +177,43 @@ public:
    * basic types (nuc vs aa)
    * @return the string of letters encoded by code
    */
-  _String ConvertCodeToLetters(long, const char);
+  _String convertCodeToLetters(long, const char);
 
   /**
    * Get the length of the alphabet used in translation
    * @return the length of the alphabet
    */
-  const unsigned long LengthOfAlphabet(void) const;
+  const unsigned long lengthOfAlphabet(void) const;
 
   /**
    * Get the length of the base alphabet
    * @return the length of the base alphabet
    */
-  inline const unsigned long Dimension(void) const { return baseLength; }
+  inline const unsigned long dimension(void) const { return base_length; }
 
   /**
    * Get the base alphabet
    * @return the base alphabet
    */
-  const _String *RetrieveCharacters(void) const;
+  const _String *retrieveCharacters(void) const;
 
   /**
    * Get the tokens added to the alphabet
    * @return the tokens added to the alphabet
    */
-  const _String &RetrieveAddedTokens(void) const { return tokensAdded; }
+  const _String &retrieveAddedTokens(void) const { return tokens_added; }
 
   /**
    * Reset the translation table and all objects and variables therein
    */
-  void Clear(void);
+  void clear(void);
 
   /**
    * Change the base alphabet to a different data type (nucleotide vs amino
    * acid)
    * @param type a constant representing the target type
    */
-  void SetStandardType(const unsigned char);
+  void setStandardType(const unsigned char);
 
   /**
    * Check that the type (nuc vs aa) of the provided pattern is the same as
@@ -222,13 +222,13 @@ public:
    * @return whether or not the pattern is the same type as the translation
    * table, t/f
    */
-  bool CheckType(const unsigned char) const;
+  bool checkType(const unsigned char) const;
 
   /**
    * Check the type (nuc vs aa) of the translation table
    * @return the type of the translation as the value of a constant (define)
    */
-  const unsigned char DetectType(void) const;
+  const unsigned char detectType(void) const;
 
   /**
    * Merge the given and this TransTable, if possible, return result
@@ -236,7 +236,7 @@ public:
    * @return A translation table that contains the product of merging the two
    * tables
    */
-  _TranslationTable *MergeTables(_TranslationTable *);
+  _TranslationTable *mergeTables(_TranslationTable *);
 
   /**
    * Get the characters in the base alphabet of length size as a string
@@ -244,7 +244,7 @@ public:
    * @return A string containing ever character in the default alphabet of
    * size (given) size
    */
-  static const _String *GetDefaultAlphabet(const long);
+  static const _String *getDefaultAlphabet(const long);
 
 private:
 
@@ -253,22 +253,22 @@ private:
    * @param try_me the string to try as an alphabet
    * @return t/f does the provided alphabet meet the requirements
    */
-  static bool CheckValidAlphabet(const _String &);
+  static bool checkValidAlphabet(const _String &);
 
   // number of "fundamental" tokens
   //(4 for nucl, ACGT; 20 for amino acids)
-  unsigned long baseLength;
+  unsigned long base_length;
 
-  _String tokensAdded, baseSet;
+  _String tokens_added, base_set;
 
-  _hyList<long> translationsAdded;
+  _hyList<long> translations_added;
 
   // if null - then assume default translation table;
-  unsigned char *checkTable;
+  unsigned char *check_table;
 };
 
-extern _TranslationTable defaultTranslationTable;
-extern _String aminoAcidOneCharCodes, dnaOneCharCodes, rnaOneCharCodes,
-    binaryOneCharCodes;
+extern _TranslationTable default_translation_table;
+extern _String amino_acid_one_char_codes, dna_one_char_codes, rna_one_char_codes,
+    binary_one_char_codes;
 
 #endif

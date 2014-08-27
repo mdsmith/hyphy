@@ -85,6 +85,10 @@ class _TranslationTableTest : public ::testing::Test {
 
 TEST_F(_TranslationTableTest, ConstructorsTest)
 {
+  _TranslationTable *test = new _TranslationTable();
+  EXPECT_EQ(4, test->lengthOfAlphabet());
+  //EXPECT_STREQ(HY_TRANSLATION_TABLE_STANDARD_BINARY, _TranslationTable::getDefaultAlphabet(2));
+  EXPECT_EQ(HY_TRANSLATION_TABLE_STANDARD_NUCLEOTIDE, test->detectType());
 
   //EXPECT_EQ(5, test.s_length);
   //EXPECT_FALSE(test.isComplete());
